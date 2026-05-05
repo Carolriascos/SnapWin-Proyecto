@@ -1,0 +1,10 @@
+import express from "express"
+import ScoresController from "./scores.controller"
+
+export const ScoresRouter = express.Router()
+
+ScoresRouter.get("/ranking/:salaId", ScoresController.getRanking)
+ScoresRouter.get("/top3",            ScoresController.getRanking)  
+
+// guarda el puntaje final
+ScoresRouter.post("/save", ScoresController.saveScore)

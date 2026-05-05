@@ -1,0 +1,78 @@
+import { Server } from "socket.io";
+import { SupabaseClient } from "../clients/SupabaseClient";
+
+/* Maneja toda la comunicación en tiempo real del juego.*/
+export const setupSocket = (io: Server) => {
+  const salas: Map<string, any[]> = new Map();
+
+  io.on("connection", (socket) => {
+    console.log(` Cliente conectado: ${socket.id}`);
+
+    socket.on("join-sala", (data: { salaId: string; jugador: any }) => {
+      const { salaId, jugador } = data;
+
+      socket.join(salaId);
+
+      const jugadoresEnSala = salas.get(salaId) ?? [];
+      jugadoresEnSala.push({ ...jugador, socketId: socket.id });
+      salas.set(salaId, jugadoresEnSala);
+
+      io.to(salaId).emit("players-update", jugadoresEnSala);
+      console.log(`👤 ${jugador.nombre} se unió a sala ${salaId}`);
+
+      // si hay 2 o más jugadores, iniciar cuenta regresiva
+      if (jugadoresEnSala.length >= 2) {
+        startCountdown(io, salaId);
+      }
+    });
+
+    socket.on("shake-data", (data: { salaId: string; jugadorId: string; fuerza: number }) => {
+      io.to(data.salaId).emit("score-update", {
+        jugadorId: data.jugadorId,
+        fuerza: data.fuerza,
+        timestamp: Date.now(),
+      });
+    });
+
+    //  Ángulo de inclinación — Dodge Game
+    socket.on("dodge-data", (data: { salaId: string; jugadorId: string; angulo: number }) => {
+      io.to(data.salaId).emit("dodge-update", {
+        jugadorId: data.jugadorId,
+        angulo: data.angulo,
+      });
+    });
+
+    //  Fin del juego de un jugador
+    socket.on("game-over", async (data: { salaId: string; jugadorId: string; puntos: number }) => {
+      io.to(data.salaId).emit("player-finished", {
+        jugadorId: data.jugadorId,
+        puntos: data.puntos,
+      });
+    });
+
+    socket.on("disconnect", () => {
+      console.log(` Cliente desconectado: ${socket.id}`);
+
+      // Eliminar jugador de todas las salas
+      salas.forEach((jugadores, salaId) => {
+        const actualizados = jugadores.filter((j) => j.socketId !== socket.id);
+        salas.set(salaId, actualizados);
+        io.to(salaId).emit("players-update", actualizados);
+      });
+    });
+  });
+};
+
+const startCountdown = (io: Server, salaId: string) => {
+  let count = 3;
+
+  const interval = setInterval(() => {
+    io.to(salaId).emit("countdown", { count });
+    count--;
+
+    if (count < 0) {
+      clearInterval(interval);
+      io.to(salaId).emit("game-start", { salaId, timestamp: Date.now() });
+    }
+  }, 1000);
+};
