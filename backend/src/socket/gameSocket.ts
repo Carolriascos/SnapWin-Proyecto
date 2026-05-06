@@ -9,6 +9,9 @@ export const setupSocket = (io: Server) => {
     console.log(` Cliente conectado: ${socket.id}`);
 
 
+
+    
+
     socket.on('admin-start-round', (salaId: string) => {
       io.to(salaId).emit('round-started', { salaId })
     })
