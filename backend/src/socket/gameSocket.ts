@@ -8,6 +8,11 @@ export const setupSocket = (io: Server) => {
   io.on("connection", (socket) => {
     console.log(` Cliente conectado: ${socket.id}`);
 
+
+    socket.on('admin-start-round', (salaId: string) => {
+      io.to(salaId).emit('round-started', { salaId })
+    })
+
     socket.on("join-sala", (data: { salaId: string; jugador: any }) => {
       const { salaId, jugador } = data;
 
@@ -48,6 +53,12 @@ export const setupSocket = (io: Server) => {
         jugadorId: data.jugadorId,
         puntos: data.puntos,
       });
+    });
+
+    // Admin inicia ronda manualmente
+    socket.on("admin-start-round", (data: { salaId: string }) => {
+      console.log(`Admin inició ronda en sala ${data.salaId}`)
+      startCountdown(io, data.salaId)
     });
 
     socket.on("disconnect", () => {
