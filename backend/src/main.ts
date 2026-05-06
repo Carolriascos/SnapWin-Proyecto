@@ -32,9 +32,16 @@ rawServer.listen(PORT, () => {
   console.log(` backend corriendo en http://localhost:${PORT}`);
 });
 
+app.use(cors({ origin: "*", credentials: true }));
+
+
 const io = new Server(rawServer, {
   path: "/real-time",
-  cors: { origin: "*" },
+  cors: { 
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  transports: ["websocket", "polling"],
 });
 
 setupSocket(io);
