@@ -27,6 +27,9 @@ export default function LoginAdminPage() {
       <br />
       <button onClick={login}>Entrar</button>
       {error && <p style={{ color: "red" }}>{error}</p>}
+      <br />
+      <br />
+      <button onClick={() => navigate("/admin/register")}>Crear cuenta de administrador</button>
     </div>
   );
 }
