@@ -37,13 +37,13 @@ export default function ResultsMallPage() {
     };
   }, [socket]);
 
-  const medallas  = ["🥇", "🥈", "🥉"];
+  const medallas  = ["", "", ""];
   const tamaños   = ["2.5rem", "2rem", "1.75rem"];
-  const colores   = ["#FFD700", "#C0C0C0", "#CD7F32"];
+  const colores   = ["#000000", "#000000", "#000000"];
 
   return (
-    <div style={{ textAlign: "center", padding: "32px", minHeight: "100vh", background: "#0f0f1a", color: "white" }}>
-      <h1 style={{ fontSize: "3rem", marginBottom: "8px" }}>🏆 Resultados Finales</h1>
+    <div style={{ textAlign: "center", padding: "32px", minHeight: "100vh", background: "#ffffff", color: "black" }}>
+      <h1 style={{ fontSize: "3rem", marginBottom: "8px" }}> Resultados Finales</h1>
 
       {terminados > 0 && (
         <p style={{ color: "#aaa", marginBottom: "32px" }}>
@@ -53,7 +53,7 @@ export default function ResultsMallPage() {
 
       {top3.length === 0 ? (
         <p style={{ color: "#666", fontSize: "1.5rem", marginTop: "60px" }}>
-          ⏳ Esperando resultados...
+           Esperando resultados...
         </p>
       ) : (
         <div style={{
@@ -94,13 +94,13 @@ export default function ResultsMallPage() {
             fontSize: "1.2rem",
             padding: "14px 32px",
             borderRadius: "12px",
-            background: "#7c3aed",
-            color: "white",
+            background: "#ffffff",
+            color: "black",
             border: "none",
             cursor: "pointer"
           }}
         >
-          🔄 Nueva ronda
+           Nueva ronda
         </button>
       </div>
     </div>

@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:3000";
+// En celular window.location.hostname es la IP del túnel ngrok
+// En PC es localhost
+const SOCKET_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:3000'
+  : ''
 
 let globalSocket: Socket | null = null;
 
