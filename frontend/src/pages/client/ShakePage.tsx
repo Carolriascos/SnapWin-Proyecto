@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? ''
 
 const DURACION = 30
 

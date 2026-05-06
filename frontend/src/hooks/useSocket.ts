@@ -1,21 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3000";
+const SOCKET_URL = "http://localhost:3000";
 
-/** Hook que conecta al WebSocket del backend */
+let globalSocket: Socket | null = null;
+
 export function useSocket(): Socket {
-  const socketRef = useRef<Socket | null>(null);
-
-  if (!socketRef.current) {
-    socketRef.current = io(BACKEND, { path: "/real-time" });
+  if (!globalSocket) {
+    globalSocket = io(SOCKET_URL, {
+      path: "/real-time",
+      transports: ["polling", "websocket"],
+      autoConnect: true,
+      reconnection: true,
+    });
   }
 
   useEffect(() => {
-    return () => {
-      socketRef.current?.disconnect();
-    };
+    if (!globalSocket?.connected) {
+      globalSocket?.connect();
+    }
   }, []);
 
-  return socketRef.current;
+  return globalSocket as Socket;
 }

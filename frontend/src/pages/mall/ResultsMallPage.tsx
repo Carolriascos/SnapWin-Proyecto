@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSocket } from "../../hooks/useSocket";
 import { ScoreEntry } from "../../types";
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3000";
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? '';
 const SALA_ID = "sala-001";
 
 /** Podio final visible en la pantalla grande del mall */

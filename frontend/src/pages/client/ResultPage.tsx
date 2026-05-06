@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ScoreEntry, Coupon } from '../../types'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? ''
 
 /** Pantalla de resultado — muestra top 3 y el cupón si ganó */
 export default function ResultPage() {

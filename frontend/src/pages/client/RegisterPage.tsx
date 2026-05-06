@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RegisterPayload } from '../../types'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:5173'
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? ''
 
 /** Formulario de registro del jugador */
 export default function RegisterPage() {
@@ -30,10 +30,16 @@ export default function RegisterPage() {
     })
     const data = await res.json()
     console.log('Respuesta:', data)
+
+
     if (data.success) {
+
+
+      navigate('/instructions')
       localStorage.setItem('jugadorId', data.data.jugadorId)
-      localStorage.setItem('salaId', form.salaId)
-      navigate('/prizes')
+      localStorage.setItem('salaId',    form.salaId)
+      localStorage.setItem('nombre',    form.nombre)
+      navigate('/waiting')
     } else {
       setError('Error: ' + data.error)
     }

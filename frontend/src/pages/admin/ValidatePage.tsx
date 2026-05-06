@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? ''
 
 interface InfoCupon {
   nivel: string
