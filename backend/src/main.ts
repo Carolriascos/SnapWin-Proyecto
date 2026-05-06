@@ -8,6 +8,9 @@ import { AuthRouter } from "./routes/auth/auth.router";
 import { ScoresRouter } from "./routes/scores/scores.router";
 import { CouponsRouter } from "./routes/coupons/coupons.router";
 import { setupSocket } from "./socket/gameSocket";
+import { AdminRouter } from "./routes/admin/admin.router"
+// ...
+
 
 const app = express();
 app.use(cors());
@@ -15,6 +18,7 @@ app.use(express.json());
 
 app.use("/", express.static("../frontend/client"));
 app.use("/mall", express.static("../frontend/mall-screen"));
+app.use("/api/admin", AdminRouter);
 app.use("/admin", express.static("../frontend/admin"));
 
 app.use("/auth", AuthRouter);
