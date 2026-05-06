@@ -12,6 +12,7 @@ export default defineConfig({
       '/scores':    { target: 'http://localhost:3000', changeOrigin: true },
       '/coupons':   { target: 'http://localhost:3000', changeOrigin: true },
       '/api':       { target: 'http://localhost:3000', changeOrigin: true },
+      '/api/admin': { target: 'http://localhost:3000', changeOrigin: true },
       '/real-time': { target: 'http://localhost:3000', changeOrigin: true, ws: true },
     }
   }
