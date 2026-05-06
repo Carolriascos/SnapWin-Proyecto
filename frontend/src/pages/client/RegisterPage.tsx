@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RegisterPayload } from '../../types'
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3000'
+const BACKEND = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:5173'
 
 /** Formulario de registro del jugador */
 export default function RegisterPage() {
@@ -21,18 +21,25 @@ export default function RegisterPage() {
       setError('Todos los campos son obligatorios')
       return
     }
-    const res  = await fetch(`${BACKEND}/auth/register`, {
+    try {
+    console.log('Intentando conectar a:', BACKEND)
+    const res = await fetch(`${BACKEND}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, edad: Number(form.edad) })
     })
     const data = await res.json()
+    console.log('Respuesta:', data)
     if (data.success) {
       localStorage.setItem('jugadorId', data.data.jugadorId)
-      localStorage.setItem('salaId',    form.salaId)
+      localStorage.setItem('salaId', form.salaId)
       navigate('/prizes')
     } else {
       setError('Error: ' + data.error)
+    }
+    } catch (e: any) {
+      setError('No se pudo conectar al servidor: ' + e.message)
+      console.error(e)
     }
   }
 
