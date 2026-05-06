@@ -1,5 +1,10 @@
 import { Routes, Route } from 'react-router-dom'
 
+// Al inicio, junto a los otros imports
+import DodgePage      from './pages/client/DodgePage'
+import DodgeLivePage  from './pages/mall/DodgeLivePage'
+
+
 // Páginas del celular (jugador)
 import IndexPage       from './pages/client/IndexPage'
 import RegisterPage    from './pages/client/RegisterPage'
@@ -42,6 +47,11 @@ export default function App() {
       <Route path="/admin"            element={<LoginAdminPage />} />
       <Route path="/admin/dashboard"  element={<DashboardPage />} />
       <Route path="/admin/validate"   element={<ValidatePage />} />
+    
+      <Route path="/dodge"        element={<DodgePage />} />
+      <Route path="/mall/dodge"   element={<DodgeLivePage />} />
+    
+    
     </Routes>
   )
 }

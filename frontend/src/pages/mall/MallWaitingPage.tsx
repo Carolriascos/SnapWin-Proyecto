@@ -11,15 +11,18 @@ export default function MallWaitingPage() {
   const [countdown, setCountdown] = useState<number | null>(null)
 
   useEffect(() => {
-    socket.on('players-update', (data: Jugador[]) => setJugadores(data))
-    socket.on('countdown',      ({ count }: { count: number }) => setCountdown(count))
-    socket.on('game-start',     () => navigate('/mall/shake'))
-    return () => {
-      socket.off('players-update')
-      socket.off('countdown')
-      socket.off('game-start')
-    }
-  }, [socket, navigate])
+  socket.emit("join-sala", { salaId: "sala-001", jugador: { id: "mall-screen" } })
+
+  socket.on("players-update", (data: Jugador[]) => setJugadores(data))
+  socket.on("countdown",      ({ count }: { count: number }) => setCountdown(count))
+  socket.on("game-start",     () => navigate("/mall/shake"))
+
+  return () => {
+    socket.off("players-update")
+    socket.off("countdown")
+    socket.off("game-start")
+  }
+}, [socket, navigate])
 
   return (
     <div>

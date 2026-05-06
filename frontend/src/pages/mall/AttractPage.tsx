@@ -8,8 +8,12 @@ export default function AttractPage() {
       <h1> SNAP WIN</h1>
       <p style={{ fontSize: '1.5rem' }}>Escanea el QR con tu celular para jugar</p>
       <p style={{ fontSize: '1.2rem', background: '#eee', padding: '10px', display: 'inline-block' }}>
-         http://localhost:5173
+
+         http://127.0.0.1:4040
       </p>
+
+      /**http://localhost:5173*/
+
       <h2>Premios</h2>
       <p>🥇 1er lugar — 20% descuento</p>
       <p>🥈 2do lugar — 15% descuento</p>

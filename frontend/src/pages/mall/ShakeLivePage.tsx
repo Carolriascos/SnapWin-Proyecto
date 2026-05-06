@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSocket } from "../../hooks/useSocket";
+import { useNavigate } from 'react-router-dom'
 
 interface JugadorScore {
   nombre: string;
@@ -9,7 +10,8 @@ interface JugadorScore {
 
 /** Tablero en vivo durante el Shake Battle — se actualiza por Socket.io */
 export default function ShakeLivePage() {
-  const socket = useSocket();
+  const socket   = useSocket();
+  const navigate = useNavigate();
   const [scores, setScores] = useState<Record<string, JugadorScore>>({});
 
   useEffect(() => {
@@ -30,17 +32,23 @@ export default function ShakeLivePage() {
       });
     });
 
+    // Cuando un jugador termina, ir a resultados después de 3 segundos
+    socket.on("player-finished", () => {
+      setTimeout(() => navigate("/mall/results"), 3000);
+    });
+
     return () => {
       socket.off("players-update");
       socket.off("score-update");
+      socket.off("player-finished");
     };
-  }, [socket]);
+  }, [socket, navigate]);
 
   const ordenados = Object.entries(scores).sort(([, a], [, b]) => b.puntos - a.puntos);
 
   return (
     <div>
-      <h1> SHAKE BATTLE en vivo</h1>
+      <h1>🔥 SHAKE BATTLE en vivo</h1>
       {ordenados.map(([id, j], i) => (
         <div
           key={id}
