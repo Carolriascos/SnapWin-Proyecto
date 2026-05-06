@@ -8,10 +8,6 @@ export const setupSocket = (io: Server) => {
   io.on("connection", (socket) => {
     console.log(` Cliente conectado: ${socket.id}`);
 
-
-
-    
-
     socket.on('admin-start-round', (salaId: string) => {
       io.to(salaId).emit('round-started', { salaId })
     })
@@ -78,7 +74,7 @@ export const setupSocket = (io: Server) => {
 };
 
 const startCountdown = (io: Server, salaId: string) => {
-  let count = 3;
+  let count = 10;
 
   const interval = setInterval(() => {
     io.to(salaId).emit("countdown", { count });
