@@ -1,0 +1,21 @@
+.snap-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  text-align: center;
+}
+
+.snap-subtitle {
+  margin: 0 0 16px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.snap-title--sm {
+  font-size: 18px;
+}
+
+.snap-error {
+  color: #f66;
+  font-size: 14px;
+  text-align: center;
+}

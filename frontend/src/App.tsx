@@ -1,6 +1,5 @@
 import { Routes, Route } from "react-router-dom";
 
-// Al inicio, junto a los otros imports
 import DodgePage from "./pages/client/DodgePage";
 import DodgeLivePage from "./pages/mall/DodgeLivePage";
 
@@ -12,6 +11,7 @@ import InstructionsPage from "./pages/client/InstructionsPage";
 import WaitingPage from "./pages/client/WaitingPage";
 import ShakePage from "./pages/client/ShakePage";
 import ResultPage from "./pages/client/ResultPage";
+import FinalRoundPage from "./pages/client/FinalRoundPage";
 
 // Páginas del mall
 import AttractPage from "./pages/mall/AttractPage";
@@ -36,6 +36,7 @@ export default function App() {
       <Route path="/waiting" element={<WaitingPage />} />
       <Route path="/shake" element={<ShakePage />} />
       <Route path="/result" element={<ResultPage />} />
+      <Route path="/final-round" element={<FinalRoundPage />} />
 
       {/* Pantalla del mall */}
       <Route path="/mall" element={<AttractPage />} />

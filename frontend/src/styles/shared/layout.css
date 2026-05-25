@@ -1,0 +1,26 @@
+.snap-screen {
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: 100vh;
+  background: var(--snap-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.snap-pattern {
+  display: none;
+}
+
+.snap-content {
+  flex: 1;
+}
+
+.snap-footer-actions {
+  margin-top: 16px;
+}
+
+.snap-label {
+  margin: 0 0 8px;
+  font-size: 14px;
+}

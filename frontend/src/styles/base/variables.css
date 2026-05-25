@@ -1,0 +1,20 @@
+:root {
+  --snap-bg: #111;
+  --snap-white: #fff;
+  --snap-lime: #9f0;
+  --snap-purple: #66f;
+  --snap-orange: #f80;
+  --snap-orange-border: #f80;
+  --snap-card-bg: #222;
+  --snap-card-purple: #222;
+  --snap-gold: #fc0;
+  --snap-silver: #ccc;
+  --snap-bronze: #c96;
+  --snap-green-border: #0a0;
+  --snap-red-border: #a00;
+  --snap-cyan: #0ff;
+  --snap-purple-soft: #99f;
+  --snap-purple-glow: transparent;
+  --snap-burgundy: #f66;
+  --snap-font: Arial, sans-serif;
+}

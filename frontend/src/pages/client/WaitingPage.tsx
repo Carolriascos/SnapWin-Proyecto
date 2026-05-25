@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import { Jugador } from '../../types'
+import SnapHeader from '../../components/SnapHeader'
+import { getGameMode, getGameLabel, hasGameMode } from '../../utils/gameMode'
 
 export default function WaitingPage() {
   const navigate  = useNavigate()
@@ -10,6 +12,10 @@ export default function WaitingPage() {
   const [countdown, setCountdown] = useState<number | null>(null)
 
   useEffect(() => {
+    if (!hasGameMode()) {
+      navigate('/')
+      return
+    }
     const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
     const nombre    = localStorage.getItem('nombre')    ?? 'Jugador'
     const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
@@ -23,7 +29,10 @@ export default function WaitingPage() {
 
     const emitJoin = () => {
       console.log('Emitiendo join-sala...')
-      socket.emit('join-sala', { salaId, jugador: { id: jugadorId, nombre } })
+      socket.emit('join-sala', {
+        salaId,
+        jugador: { id: jugadorId, nombre, gameMode: getGameMode() },
+      })
     }
 
     if (socket.connected) {
@@ -43,9 +52,10 @@ export default function WaitingPage() {
       setCountdown(count)
     })
 
-    socket.on('game-start', () => {
-      console.log('game-start recibido!')
-      navigate('/shake')
+    socket.on('game-start', ({ game }: { game?: string }) => {
+      const modo = game === 'dodge' || game === 'shake' ? game : getGameMode()
+      console.log('game-start recibido!', modo)
+      navigate(modo === 'dodge' ? '/dodge' : '/shake')
     })
 
     return () => {
@@ -56,18 +66,48 @@ export default function WaitingPage() {
     }
   }, [socket, navigate])
 
+  const progressPct =
+    countdown !== null && countdown > 0 ? ((4 - Math.min(countdown, 3)) / 3) * 100 : 60
+
   return (
-    <div>
-      <h1>⏳ Sala de espera</h1>
-      <p>Jugadores conectados: {jugadores.length}</p>
-      {jugadores.map(j => (
-        <p key={j.id}>🎮 {j.nombre || 'Jugador'}</p>
-      ))}
-      {countdown !== null && (
-        <div style={{ fontSize: '4rem', fontWeight: 'bold' }}>
-          {countdown > 0 ? countdown : '¡Ya!'}
-        </div>
-      )}
+    <div className="snap-screen">
+      <div className="snap-pattern" aria-hidden />
+      <SnapHeader compact />
+      <main className="snap-content">
+        {countdown === null ? (
+          <div className="waiting-prep">
+            <div className="waiting-controller" aria-hidden>🎮</div>
+            <p className="waiting-status">Preparando {getGameLabel()}...</p>
+            <div className="waiting-players-box">
+              <p className="waiting-players-count">{jugadores.length}</p>
+              <p className="waiting-players-label">Jugadores conectados</p>
+              <div className="waiting-player-list">
+                {jugadores.map(j => (
+                  <p key={j.id}>🎮 {j.nombre || 'Jugador'}</p>
+                ))}
+              </div>
+            </div>
+            <div className="waiting-dots" aria-hidden>
+              <span /><span /><span />
+            </div>
+          </div>
+        ) : (
+          <div className="waiting-countdown">
+            <p className="waiting-countdown__label">Prepárate</p>
+            <div className="waiting-countdown__number">
+              {countdown > 0 ? countdown : '¡Ya!'}
+            </div>
+            <p className="waiting-countdown__hint">El juego empieza en...</p>
+            <div className="waiting-progress">
+              <div
+                className="waiting-progress__bar"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <p className="waiting-countdown__sub">Ten tu celular listo</p>
+          </div>
+        )}
+      </main>
     </div>
   )
 }

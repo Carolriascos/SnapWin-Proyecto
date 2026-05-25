@@ -1,0 +1,44 @@
+.waiting-prep,
+.waiting-countdown {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.waiting-controller {
+  font-size: 48px;
+  margin: 16px 0;
+}
+
+.waiting-players-box {
+  padding: 16px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  margin: 16px auto;
+  max-width: 280px;
+}
+
+.waiting-players-count {
+  font-size: 36px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.waiting-countdown__number {
+  font-size: 64px;
+  font-weight: bold;
+  margin: 16px 0;
+}
+
+.waiting-progress {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+  max-width: 280px;
+  margin: 8px auto;
+}
+
+.waiting-progress__bar {
+  height: 100%;
+  background: var(--snap-purple);
+  border-radius: 4px;
+}

@@ -1,13 +1,15 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import MallHeader from '../../components/MallHeader'
+import { getPlayerAppUrl } from '../../utils/playerAppUrl'
 
-/** Pantalla de atracción del mall — muestra QR y premios */
+/** Pantalla de atracción del mall — muestra QR  */
 export default function AttractPage() {
   const navigate = useNavigate()
   const [urlJugador, setUrlJugador] = useState('')
 
   useEffect(() => {
-    const url = import.meta.env.VITE_FRONTEND_URL ?? `https://hefty-army-celibacy.ngrok-free.dev`
+    const url = getPlayerAppUrl()
     setUrlJugador(url)
 
     const script = document.createElement('script')
@@ -18,32 +20,67 @@ export default function AttractPage() {
         container.innerHTML = ''
         new (window as any).QRCode(container, {
           text: url,
-          width: 200,
-          height: 200,
+          width: 220,
+          height: 220,
         })
       }
     }
     document.body.appendChild(script)
   }, [])
 
+  const esLocalhost =
+    urlJugador.includes('localhost') || urlJugador.includes('127.0.0.1')
+
   return (
-    <div style={{ textAlign: 'center', padding: '20px' }}>
-      <h1>SNAP WIN</h1>
-      <p style={{ fontSize: '1.5rem' }}>Escanea el QR con tu celular para jugar</p>
+    <div className="mall-screen mall-attract">
+      <div className="mall-pattern" aria-hidden />
+      <MallHeader />
 
-      {/* QR real escaneable */}
-      <div id="qr-container" style={{ margin: '20px auto', display: 'inline-block' }} />
+      <div className="mall-attract__grid">
+        <div>
+          <h2 className="mall-attract__title">
+            ¡ESCANÉAME Y
+            <span>JUEGA GRATIS!</span>
+          </h2>
+          <div className="mall-attract__tags">
+            <span className="mall-attract__tag mall-attract__tag--shake">SHAKE BATTLE</span>
+            <span className="mall-attract__tag mall-attract__tag--dodge">DODGE GAME</span>
+          </div>
+          <p className="mall-attract__wifi-hint">
+            Escanea y elige tu juego en el celular · misma Wi‑Fi
+          </p>
+        </div>
 
-      <p style={{ fontSize: '1rem', background: '#eee', padding: '8px 16px', display: 'inline-block', borderRadius: '8px' }}>
-        {urlJugador}
-      </p>
+        <div className="mall-attract__qr-wrap">
+          <div id="qr-container" className="mall-qr-frame" />
+        </div>
+      </div>
 
-      <h2>Premios</h2>
-      <p>🥇 1er lugar — 20% descuento</p>
-      <p>🥈 2do lugar — 15% descuento</p>
-      <p>🥉 3er lugar — 10% descuento</p>
-      <br />
-      <button onClick={() => navigate('/mall/waiting')}>Ver sala de espera</button>
+      {urlJugador && (
+        <p className="mall-attract__meta">
+          {urlJugador}
+          {esLocalhost && (
+            <>
+              <br />
+              <span className="mall-attract__warn">
+                Pon en frontend/.env: VITE_FRONTEND_URL=http://TU_IP:5173 (la IP Network de Vite)
+              </span>
+            </>
+          )}
+        </p>
+      )}
+
+      <div className="mall-attract__prizes">
+        <span>🥇 1er lugar — 20%</span>
+        <span>🥈 2do lugar — 15%</span>
+        <span>🥉 3er lugar — 10%</span>
+      </div>
+
+      <div style={{ textAlign: 'center' }}>
+        <button type="button" className="mall-btn-secondary" onClick={() => navigate('/mall/waiting')}>
+          Ver sala de espera
+        </button>
+      </div>
     </div>
   )
 }

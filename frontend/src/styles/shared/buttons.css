@@ -1,0 +1,21 @@
+.btn-primary {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--snap-purple);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.btn-outline-orange {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--snap-orange);
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}

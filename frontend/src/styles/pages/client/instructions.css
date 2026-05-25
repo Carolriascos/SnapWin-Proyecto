@@ -1,0 +1,16 @@
+.instructions-game {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.instructions-list {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 0;
+}
+
+.instructions-list li {
+  margin-bottom: 8px;
+  font-size: 14px;
+}

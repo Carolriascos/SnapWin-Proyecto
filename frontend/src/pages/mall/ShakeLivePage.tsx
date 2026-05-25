@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { useSocket } from "../../hooks/useSocket";
 import { useNavigate } from 'react-router-dom'
+import MallHeader from '../../components/MallHeader'
 
 interface JugadorScore {
   nombre: string;
   color: string;
   puntos: number;
 }
+
+const BOARD_DOTS = 72
+const DOT_COLORS = ["#db2777", "#ea580c", "#16a34a", "#7c3aed"]
 
 export default function ShakeLivePage() {
   const socket   = useSocket();
@@ -65,20 +69,62 @@ export default function ShakeLivePage() {
     .filter(([id]) => id !== 'mall-screen')
     .sort(([, a], [, b]) => b.puntos - a.puntos);
 
+  const left = ordenados.slice(1, 3)
+  const right = [ordenados[0], ordenados[3]].filter(Boolean) as [string, JugadorScore][]
+  const ranks = ['2do lugar', '3er lugar', '1er lugar', '4to lugar']
+
+  const renderCard = ([id, j]: [string, JugadorScore], rankLabel: string) => (
+    <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
+      <p className="mall-leader-card__name">{j.nombre}</p>
+      <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
+      <p className="mall-leader-card__rank">{rankLabel}</p>
+    </div>
+  )
+
   return (
-    <div>
-      <h1>🔥 SHAKE BATTLE en vivo</h1>
-      {ordenados.length === 0
-        ? <p>Esperando puntajes...</p>
-        : ordenados.map(([id, j], i) => (
-          <div
-            key={id}
-            style={{ background: j.color, padding: "16px", margin: "8px", borderRadius: "8px", fontSize: "1.5rem", color: 'white', fontWeight: 'bold' }}
-          >
-            {i + 1}. {j.nombre} — {j.puntos} pts
+    <div className="mall-screen mall-shake">
+      <div className="mall-pattern" aria-hidden />
+      <MallHeader />
+
+      <div className="mall-shake__top">
+        <p className="mall-live-badge">¡JUEGO EN VIVO!</p>
+        <span className="mall-mode-tag">SHAKE BATTLE</span>
+      </div>
+
+      <div className="mall-shake__layout">
+        <aside>
+          <p className="mall-shake__timer">
+            00:30
+            <small>TIEMPO RESTANTE</small>
+          </p>
+          {left.map(([id, j], i) => renderCard([id, j], ranks[i + 1] ?? ''))}
+        </aside>
+
+        <div>
+          {ordenados.length === 0 ? (
+            <p className="mall-shake__empty">Esperando puntajes...</p>
+          ) : (
+            <div className="mall-board" aria-hidden>
+              {Array.from({ length: BOARD_DOTS }, (_, i) => (
+                <span
+                  key={i}
+                  className="mall-board__dot"
+                  style={{ background: DOT_COLORS[i % DOT_COLORS.length] }}
+                />
+              ))}
+            </div>
+          )}
+          <div className="mall-shake__hint-box">
+             agita tu celular más fuerte!
           </div>
-        ))
-      }
+        </div>
+
+        <aside>
+          {right.map(([id, j], i) =>
+            renderCard([id, j], i === 0 ? ranks[2] : ranks[3])
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

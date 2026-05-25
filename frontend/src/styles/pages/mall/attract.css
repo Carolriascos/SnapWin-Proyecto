@@ -1,0 +1,43 @@
+.mall-attract__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.mall-attract__title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.mall-attract__tags {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.mall-attract__tag {
+  padding: 8px 12px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.mall-qr-frame {
+  padding: 12px;
+  background: #fff;
+  display: inline-block;
+}
+
+.mall-attract__meta,
+.mall-attract__wifi-hint {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.mall-btn-secondary {
+  margin-top: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+}

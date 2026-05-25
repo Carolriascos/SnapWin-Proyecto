@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
-
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? ''
+import SnapHeader from '../../components/SnapHeader'
+import { API_BASE } from '../../config/api'
 const DURACION = 30
 
 export default function ShakePage() {
@@ -22,7 +22,7 @@ export default function ShakePage() {
     socket.emit('shake-data', { salaId, jugadorId, fuerza })
   }
 
-  // Sensor real del celular
+  // Sensor celular
   useEffect(() => {
     const handler = (e: DeviceMotionEvent) => {
       const acc = e.acceleration
@@ -34,7 +34,7 @@ export default function ShakePage() {
     return () => window.removeEventListener('devicemotion', handler)
   }, [])
 
-  // Timer de 30 segundos
+  
   useEffect(() => {
     const intervalo = setInterval(() => {
       setSegundos(prev => {
@@ -52,7 +52,7 @@ export default function ShakePage() {
   const terminar = async () => {
     if (terminadoRef.current) return
     terminadoRef.current = true
-    await fetch(`${BACKEND}/scores/save`, {
+    await fetch(`${API_BASE}/scores/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jugadorId, salaId, juego: 'shake', puntos: puntosRef.current })
@@ -61,27 +61,50 @@ export default function ShakePage() {
     navigate('/result')
   }
 
-  // Esta línea faltaba — define el color según el tiempo restante
-  const colorTimer = segundos > 15 ? 'green' : segundos > 5 ? 'orange' : 'red'
+  const timerClass =
+    segundos > 15 ? 'shake-timer-pill--ok' : segundos > 5 ? 'shake-timer-pill--warn' : ''
+
+  const intensityPct = Math.min(100, Math.round((puntos / 1500) * 100) || 0)
 
   return (
-    <div style={{ textAlign: 'center', padding: '20px' }}>
-      <h1>¡Agita el celular!</h1>
+    <div className="snap-screen shake-screen">
+      <div className="snap-pattern" aria-hidden />
+      <SnapHeader compact />
+      <main className="snap-content">
+        <div className={`shake-timer-pill ${timerClass}`}>
+          <span aria-hidden>⏱</span>
+          <span>{String(segundos).padStart(2, '0')}s</span>
+        </div>
 
-      <p style={{ fontSize: '3rem', fontWeight: 'bold', color: colorTimer, margin: '10px 0' }}>
-        {segundos}s
-      </p>
+        <div className="shake-score-card">
+          <p className="shake-score-card__label">Tu puntuación</p>
+          <p className="shake-score-card__value">{puntos.toLocaleString()}</p>
+          <p className="shake-score-card__sub">Puntuación acumulada</p>
+        </div>
 
-      <p style={{ fontSize: '2.5rem', margin: '10px 0' }}>
-        {puntos} pts
-      </p>
+        <div className="shake-action-box">
+          <div className="shake-action-box__icon" aria-hidden>📱</div>
+          <h1>¡Agita el celular!</h1>
+          <p className="shake-action-box__hint">Agítalo con la mayor fuerza posible</p>
+          <button
+            type="button"
+            className="shake-demo-btn"
+            onClick={() => agregarPuntos(20 + Math.random() * 10)}
+          >
+            SHAKE! (demo)
+          </button>
+        </div>
 
-      <button
-        style={{ fontSize: '1.5rem', padding: '24px 40px', marginTop: '20px', borderRadius: '12px' }}
-        onClick={() => agregarPuntos(20 + Math.random() * 10)}
-      >
-        SHAKE! (demo)
-      </button>
+        <div className="shake-intensity">
+          <div className="shake-intensity__row">
+            <span>INTENSIDAD</span>
+            <span>{intensityPct}%</span>
+          </div>
+          <div className="shake-intensity__bar">
+            <div className="shake-intensity__fill" style={{ width: `${intensityPct}%` }} />
+          </div>
+        </div>
+      </main>
     </div>
   )
 }

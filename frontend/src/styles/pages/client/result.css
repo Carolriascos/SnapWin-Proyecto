@@ -1,0 +1,80 @@
+.result-status {
+  padding: 12px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.result-status--win {
+  border-color: var(--snap-green-border);
+}
+
+.result-status--lose {
+  border-color: var(--snap-red-border);
+}
+
+.result-points {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.result-points__value {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.result-prize-card,
+.result-miss-card {
+  padding: 16px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.result-prize-card__discount {
+  font-size: 28px;
+  font-weight: bold;
+  margin: 8px 0;
+}
+
+.result-code {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 8px 16px;
+  background: #333;
+  border-radius: 8px;
+}
+
+.result-email-box {
+  padding: 12px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.result-ranking p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.result-next-drop {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.result-next-drop__ring {
+  padding: 24px;
+  border: 2px solid var(--snap-cyan);
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.result-next-drop__time {
+  font-size: 36px;
+  font-weight: bold;
+  margin: 8px 0 0;
+}

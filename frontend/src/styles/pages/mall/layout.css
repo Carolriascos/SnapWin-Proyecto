@@ -1,0 +1,15 @@
+.mall-screen {
+  min-height: 100vh;
+  padding: 16px;
+  background: #111;
+  color: #fff;
+  font-family: Arial, sans-serif;
+}
+
+.mall-pattern {
+  display: none;
+}
+
+.mall-content {
+  margin-top: 16px;
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import { Jugador } from '../../types'
+import MallHeader from '../../components/MallHeader'
 
 export default function MallWaitingPage() {
   const navigate  = useNavigate()
@@ -25,7 +26,9 @@ export default function MallWaitingPage() {
 
     socket.on('players-update', (data: Jugador[]) => setJugadores(data))
     socket.on('countdown',      ({ count }: { count: number }) => setCountdown(count))
-    socket.on('game-start',     () => navigate('/mall/shake'))
+    socket.on('game-start', ({ game }: { game?: string }) =>
+      navigate(game === 'dodge' ? '/mall/dodge' : '/mall/shake')
+    )
 
     return () => {
       socket.off('connect', emitJoin)
@@ -35,19 +38,42 @@ export default function MallWaitingPage() {
     }
   }, [socket, navigate])
 
+  const lista = jugadores.filter(j => j.id !== 'mall-screen')
+
   return (
-    <div>
-      <h1>⏳ Sala de espera</h1>
-      <h2>Jugadores conectados:</h2>
-      {jugadores.filter(j => j.id !== 'mall-screen').length === 0
-        ? <p>Esperando jugadores...</p>
-        : jugadores
-            .filter(j => j.id !== 'mall-screen')
-            .map(j => <p key={j.id}>🎮 {j.nombre || 'Jugador'}</p>)
-      }
-      {countdown !== null && (
-        <div style={{ fontSize: '5rem', fontWeight: 'bold', color: 'red' }}>
-          {countdown > 0 ? countdown : '¡JUEGO!'}
+    <div className="mall-screen">
+      <div className="mall-pattern" aria-hidden />
+      <MallHeader />
+
+      {countdown !== null ? (
+        <div className="mall-countdown">
+          <div className="mall-countdown__ring">
+            <p className="mall-countdown__label">GET READY</p>
+            <p className="mall-countdown__hint">Something is about to drop</p>
+            <p className="mall-countdown__number">
+              {countdown > 0 ? String(countdown).padStart(2, '0') : '¡YA!'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="mall-waiting">
+          <div className="mall-waiting__glow" aria-hidden />
+          <h2 className="mall-waiting__title">SALA DE ESPERA</h2>
+          <p className="mall-waiting__count">
+            {lista.length} JUGADOR{lista.length !== 1 ? 'ES' : ''}
+          </p>
+
+          {lista.length === 0 ? (
+            <p className="mall-waiting__empty">Esperando jugadores...</p>
+          ) : (
+            <div className="mall-waiting__grid">
+              {lista.map(j => (
+                <p key={j.id} className="mall-player-chip">
+                  {j.nombre || 'Jugador'}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

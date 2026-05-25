@@ -1,0 +1,49 @@
+.shake-screen {
+  text-align: center;
+}
+
+.shake-timer-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid #666;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.shake-score-card {
+  padding: 16px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.shake-score-card__value {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 8px 0;
+}
+
+.shake-action-box {
+  padding: 16px;
+  border: 1px dashed #666;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.shake-intensity__bar {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+}
+
+.shake-intensity__fill {
+  height: 100%;
+  background: var(--snap-purple);
+  border-radius: 4px;
+}
+
+.shake-demo-btn {
+  margin-top: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+}

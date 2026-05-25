@@ -1,18 +1,18 @@
-import express, { Request, Response } from "express";
+import "dotenv/config";
+
+import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import "dotenv/config";
 
 import { AuthRouter } from "./routes/auth/auth.router";
 import { ScoresRouter } from "./routes/scores/scores.router";
 import { CouponsRouter } from "./routes/coupons/coupons.router";
 import { setupSocket } from "./socket/gameSocket";
-import { AdminRouter } from "./routes/admin/admin.router"
-// ...
-
+import { AdminRouter } from "./routes/admin/admin.router";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -25,27 +25,25 @@ app.use("/auth", AuthRouter);
 app.use("/scores", ScoresRouter);
 app.use("/coupons", CouponsRouter);
 
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.json({ status: "ok", project: "Flash Play", timestamp: new Date().toISOString() });
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
 });
 
 const PORT = process.env.PORT ?? 3000;
+
 const rawServer = createServer(app);
-
-rawServer.listen(PORT, () => {
-  console.log(` backend corriendo en http://localhost:${PORT}`);
-});
-
-app.use(cors({ origin: "*", credentials: true }));
-
 
 const io = new Server(rawServer, {
   path: "/real-time",
-  cors: { 
+  cors: {
     origin: "*",
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
   },
   transports: ["websocket", "polling"],
 });
 
 setupSocket(io);
+
+rawServer.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`backend corriendo en http://localhost:${PORT}`);
+});

@@ -1,0 +1,81 @@
+.dodge-stats {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.dodge-game__mode {
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.dodge-timer {
+  text-align: center;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.dodge-arena {
+  position: relative;
+  height: 280px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  touch-action: none;
+}
+
+.dodge-arena__lanes {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  pointer-events: none;
+}
+
+.dodge-arena__lanes span {
+  border-right: 1px solid #444;
+}
+
+.dodge-lane--active {
+  background: #333;
+}
+
+.dodge-obstacle-fall {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  background: var(--snap-orange);
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.dodge-player-arrow {
+  position: absolute;
+  bottom: 16px;
+  transform: translateX(-50%);
+  font-size: 24px;
+  z-index: 2;
+}
+
+.dodge-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.dodge-controls button {
+  padding: 12px 24px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.dodge-hint {
+  text-align: center;
+  font-size: 12px;
+  margin-top: 8px;
+}

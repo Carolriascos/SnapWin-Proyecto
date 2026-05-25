@@ -54,7 +54,7 @@ export default function DashboardPage() {
     cargar();
   }, []);
 
-  // Escuchar jugadores conectados en tiempo real
+  //  jugadores conectados en tiempo real
   useEffect(() => {
     const emitJoin = () => {
       socket.emit("join-sala", { salaId: SALA_ID, jugador: { id: "admin-panel", nombre: "Admin" } });
@@ -111,7 +111,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Jugadores conectados ahora */}
+      {/* Jugadores conectados  */}
       <div style={{ background: "#ffffff", padding: "16px", borderRadius: "12px", marginBottom: "24px" }}>
         <h2>Jugadores conectados ahora ({jugadoresVivos.length})</h2>
         {jugadoresVivos.length === 0

@@ -1,0 +1,43 @@
+.welcome-page {
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  min-height: 100vh;
+  background: var(--snap-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-page__pattern {
+  display: none;
+}
+
+.welcome-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.welcome-pick {
+  text-align: center;
+  font-size: 14px;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.btn-shake,
+.btn-dodge,
+.btn-play {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}

@@ -1,0 +1,43 @@
+.mall-waiting,
+.mall-countdown {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.mall-waiting__title {
+  font-size: 24px;
+  margin: 0 0 8px;
+}
+
+.mall-waiting__count {
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.mall-waiting__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  max-width: 600px;
+  margin: 16px auto;
+}
+
+.mall-player-chip {
+  padding: 8px;
+  border: 1px solid #9f0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.mall-countdown__number {
+  font-size: 72px;
+  font-weight: bold;
+  margin-top: 16px;
+}
+
+.mall-countdown__ring {
+  padding: 32px;
+  border: 2px solid #9f0;
+  border-radius: 8px;
+  display: inline-block;
+}

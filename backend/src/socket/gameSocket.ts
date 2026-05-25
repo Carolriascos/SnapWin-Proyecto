@@ -4,6 +4,7 @@ import { SupabaseClient } from "../clients/SupabaseClient";
 /* Maneja toda la comunicación en tiempo real del juego.*/
 export const setupSocket = (io: Server) => {
   const salas: Map<string, any[]> = new Map();
+  const salaGameMode: Map<string, "shake" | "dodge"> = new Map();
 
   io.on("connection", (socket) => {
     console.log(` Cliente conectado: ${socket.id}`);
@@ -15,10 +16,17 @@ export const setupSocket = (io: Server) => {
     socket.on("join-sala", (data: { salaId: string; jugador: any }) => {
       const { salaId, jugador } = data;
 
+      const modo = jugador?.gameMode === "dodge" ? "dodge" : "shake";
       socket.join(salaId);
 
       const jugadoresEnSala = salas.get(salaId) ?? [];
-      jugadoresEnSala.push({ ...jugador, socketId: socket.id });
+      const humanosAntes = jugadoresEnSala.filter((j) => j.id !== "mall-screen").length;
+
+      if (jugador?.id !== "mall-screen" && humanosAntes === 0) {
+        salaGameMode.set(salaId, modo);
+      }
+
+      jugadoresEnSala.push({ ...jugador, socketId: socket.id, gameMode: modo });
       salas.set(salaId, jugadoresEnSala);
 
       io.to(salaId).emit("players-update", jugadoresEnSala);
@@ -26,7 +34,7 @@ export const setupSocket = (io: Server) => {
 
       // si hay 2 o más jugadores, iniciar cuenta regresiva
       if (jugadoresEnSala.length >= 2) {
-        startCountdown(io, salaId);
+        startCountdown(io, salaId, salaGameMode);
       }
     });
 
@@ -39,12 +47,17 @@ export const setupSocket = (io: Server) => {
     });
 
     //  Ángulo de inclinación — Dodge Game
-    socket.on("dodge-data", (data: { salaId: string; jugadorId: string; angulo: number }) => {
-      io.to(data.salaId).emit("dodge-update", {
-        jugadorId: data.jugadorId,
-        angulo: data.angulo,
-      });
-    });
+    socket.on(
+      "dodge-data",
+      (data: { salaId: string; jugadorId: string; angulo?: number; posicion?: number; carril?: number }) => {
+        io.to(data.salaId).emit("dodge-update", {
+          jugadorId: data.jugadorId,
+          angulo: data.angulo ?? 0,
+          posicion: data.posicion,
+          carril: data.carril,
+        });
+      }
+    );
 
     //  Fin del juego de un jugador
     socket.on("game-over", async (data: { salaId: string; jugadorId: string; puntos: number }) => {
@@ -54,10 +67,9 @@ export const setupSocket = (io: Server) => {
       });
     });
 
-    // Admin inicia ronda manualmente
     socket.on("admin-start-round", (data: { salaId: string }) => {
       console.log(`Admin inició ronda en sala ${data.salaId}`)
-      startCountdown(io, data.salaId)
+      startCountdown(io, data.salaId, salaGameMode)
     });
 
     socket.on("disconnect", () => {
@@ -67,13 +79,16 @@ export const setupSocket = (io: Server) => {
       salas.forEach((jugadores, salaId) => {
         const actualizados = jugadores.filter((j) => j.socketId !== socket.id);
         salas.set(salaId, actualizados);
+        if (actualizados.filter((j) => j.id !== "mall-screen").length === 0) {
+          salaGameMode.delete(salaId);
+        }
         io.to(salaId).emit("players-update", actualizados);
       });
     });
   });
 };
 
-const startCountdown = (io: Server, salaId: string) => {
+const startCountdown = (io: Server, salaId: string, salaGameMode?: Map<string, "shake" | "dodge">) => {
   let count = 10;
 
   const interval = setInterval(() => {
@@ -82,7 +97,8 @@ const startCountdown = (io: Server, salaId: string) => {
 
     if (count < 0) {
       clearInterval(interval);
-      io.to(salaId).emit("game-start", { salaId, timestamp: Date.now() });
+      const game = salaGameMode?.get(salaId) ?? "shake";
+      io.to(salaId).emit("game-start", { salaId, game, timestamp: Date.now() });
     }
   }, 1000);
 };

@@ -1,0 +1,21 @@
+@media (max-width: 900px) {
+  .mall-attract__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mall-shake__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mall-waiting__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mall-dodge__lanes {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mall-results__columns {
+    grid-template-columns: 1fr;
+  }
+}

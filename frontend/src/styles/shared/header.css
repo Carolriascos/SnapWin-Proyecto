@@ -1,0 +1,28 @@
+.snap-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.snap-header--compact {
+  margin-bottom: 8px;
+}
+
+.snap-logo {
+  margin: 0;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.snap-logo__win {
+  color: var(--snap-lime);
+}
+
+.snap-tagline {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.snap-location {
+  margin: 8px 0 0;
+  font-size: 12px;
+}

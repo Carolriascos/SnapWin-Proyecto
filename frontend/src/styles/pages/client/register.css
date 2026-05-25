@@ -1,0 +1,22 @@
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.register-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.register-field input,
+.register-field select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #666;
+  border-radius: 4px;
+  background: #222;
+  color: #fff;
+  font-size: 16px;
+}
