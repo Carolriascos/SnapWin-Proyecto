@@ -1,21 +1,41 @@
 .btn-primary {
   width: 100%;
-  padding: 12px;
+  padding: 1rem 1.25rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--snap-purple);
-  color: #fff;
-  font-size: 16px;
+  color: var(--snap-white);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
+  box-shadow:
+    0 0 22px var(--snap-purple-glow),
+    0 0 40px rgba(126, 63, 242, 0.2);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
 }
 
 .btn-outline-orange {
   width: 100%;
-  padding: 12px;
-  border: 2px solid var(--snap-orange);
-  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  border-radius: 999px;
   background: transparent;
-  color: #fff;
-  font-size: 16px;
+  color: var(--snap-white);
+  border: 1.5px solid var(--snap-orange-border);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }

@@ -1,9 +1,17 @@
+/*
+  estilos del frontend
+*/
+
 @import "./base/reset.css";
 @import "./base/variables.css";
+
+/*(header, botones) */
 @import "./shared/layout.css";
 @import "./shared/header.css";
 @import "./shared/typography.css";
 @import "./shared/buttons.css";
+
+/* Jugador — celular */
 @import "./pages/client/index.css";
 @import "./pages/client/register.css";
 @import "./pages/client/prizes.css";
@@ -12,6 +20,8 @@
 @import "./pages/client/shake.css";
 @import "./pages/client/dodge.css";
 @import "./pages/client/result.css";
+
+/* Mall — pantalla grande */
 @import "./pages/mall/layout.css";
 @import "./pages/mall/header.css";
 @import "./pages/mall/attract.css";

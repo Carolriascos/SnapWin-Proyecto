@@ -1,80 +1,211 @@
+/* resultados y próxima ronda */
 .result-status {
-  padding: 12px;
-  border: 1px solid #666;
-  border-radius: 8px;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 1rem;
+  border: 1px solid;
 }
 
 .result-status--win {
   border-color: var(--snap-green-border);
+  background: rgba(45, 106, 62, 0.15);
 }
 
 .result-status--lose {
   border-color: var(--snap-red-border);
+  background: rgba(139, 32, 32, 0.15);
+}
+
+.result-status h2 {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.result-status p {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+}
+
+.result-status--win .result-place {
+  color: var(--snap-lime);
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .result-points {
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 1rem;
 }
 
 .result-points__value {
-  font-size: 32px;
-  font-weight: bold;
   margin: 0;
+  font-size: 2.5rem;
+  font-weight: 800;
 }
 
-.result-prize-card,
-.result-miss-card {
-  padding: 16px;
-  border: 1px solid #666;
-  border-radius: 8px;
+.result-points__label {
+  margin: 0.25rem 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.result-prize-card {
+  width: 100%;
+  padding: 1.25rem;
+  border-radius: 14px;
+  background: #1a1a2e;
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 1rem;
+}
+
+.result-prize-card__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--snap-purple-soft);
 }
 
 .result-prize-card__discount {
-  font-size: 28px;
-  font-weight: bold;
-  margin: 8px 0;
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--snap-lime);
+}
+
+.result-prize-card__meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .result-code {
   display: inline-block;
-  margin-top: 8px;
-  padding: 8px 16px;
-  background: #333;
-  border-radius: 8px;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .result-email-box {
-  padding: 12px;
-  border: 1px solid #666;
-  border-radius: 8px;
+  width: 100%;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--snap-green-border);
+  background: rgba(45, 106, 62, 0.1);
   text-align: center;
-  margin-bottom: 12px;
+  font-size: 0.75rem;
+  margin-bottom: 1rem;
 }
 
+.result-email-box strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.result-ranking {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.result-ranking li,
 .result-ranking p {
-  margin: 4px 0;
-  font-size: 14px;
+  margin: 0.35rem 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.result-miss-card {
+  width: 100%;
+  padding: 1.25rem;
+  border-radius: 14px;
+  background: #1a1a2e;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.result-miss-card__title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--snap-purple-soft);
+}
+
+.result-miss-card__pts {
+  margin: 0.35rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--snap-orange);
+}
+
+.result-miss-card__sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .result-next-drop {
-  text-align: center;
-  padding: 24px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+}
+
+.result-next-drop__sub {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  max-width: 240px;
 }
 
 .result-next-drop__ring {
-  padding: 24px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
   border: 2px solid var(--snap-cyan);
-  border-radius: 8px;
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  box-shadow: 0 0 24px rgba(0, 229, 204, 0.25);
+}
+
+.result-next-drop__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.result-next-drop__hint {
+  margin: 0.5rem 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .result-next-drop__time {
-  font-size: 36px;
-  font-weight: bold;
-  margin: 8px 0 0;
+  margin: 0;
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--snap-cyan);
+  text-shadow: 0 0 20px rgba(0, 229, 204, 0.6);
 }

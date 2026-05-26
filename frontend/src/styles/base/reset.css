@@ -1,14 +1,16 @@
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-body {
+html,
+body,
+#root {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #111;
-  color: #fff;
+  min-height: 100%;
 }
 
-#root {
-  min-height: 100vh;
+body {
+  background: #000000;
 }

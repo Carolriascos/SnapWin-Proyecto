@@ -1,61 +1,110 @@
+.mall-shake {
+  min-height: calc(100dvh - 100px);
+  display: flex;
+  flex-direction: column;
+}
+
 .mall-shake__top {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 
 .mall-live-badge {
-  font-size: 20px;
-  font-weight: bold;
   margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .mall-mode-tag {
   display: inline-block;
-  padding: 4px 12px;
-  border: 1px solid #f80;
-  border-radius: 8px;
-  font-size: 12px;
-  margin-top: 8px;
+  margin-top: 0.35rem;
+  padding: 0.35rem 1rem;
+  border: 1.5px solid var(--mall-orange);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
 }
 
 .mall-shake__layout {
+  flex: 1;
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
-  gap: 16px;
+  grid-template-columns: 200px 1fr 200px;
+  gap: 1rem;
+  align-items: stretch;
 }
 
 .mall-shake__timer {
-  font-size: 24px;
-  font-weight: bold;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--mall-orange);
+}
+
+.mall-shake__timer small {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .mall-leader-card {
-  padding: 8px;
-  border: 1px solid #666;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: 0.65rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--mall-card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+}
+
+.mall-leader-card__name {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.mall-leader-card__pts {
+  color: var(--mall-lime);
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.mall-leader-card__rank {
+  margin-top: 0.35rem;
+  font-size: 0.65rem;
+  opacity: 0.75;
 }
 
 .mall-board {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid #666;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  align-self: center;
 }
 
 .mall-board__dot {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
-  min-height: 8px;
+  min-width: 8px;
 }
 
 .mall-shake__hint-box {
-  padding: 12px;
-  border: 1px solid #666;
-  border-radius: 8px;
-  font-size: 14px;
+  align-self: center;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--mall-card);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.mall-shake__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  color: rgba(255, 255, 255, 0.5);
 }

@@ -1,28 +1,88 @@
 .snap-header {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 1.25rem;
 }
 
 .snap-header--compact {
-  margin-bottom: 8px;
+  margin-bottom: 0.85rem;
+}
+
+.snap-header--compact .snap-logo {
+  font-size: clamp(1.35rem, 5vw, 1.55rem);
+}
+
+.snap-header--compact .snap-tagline {
+  font-size: 0.8rem;
+}
+
+.snap-header--compact .snap-location {
+  font-size: 0.65rem;
+  margin-top: 0.35rem;
 }
 
 .snap-logo {
   margin: 0;
-  font-size: 24px;
-  font-weight: bold;
+  padding: 0;
+  font-size: clamp(1.75rem, 7vw, 2.1rem);
+  font-weight: 800;
+  line-height: 1.05;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+}
+
+.snap-logo__snap,
+.snap-logo__n {
+  color: var(--snap-white);
+  text-transform: lowercase;
+}
+
+.snap-logo__bolt {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.05em;
+  transform: translateY(-0.06em);
+}
+
+.snap-logo__bolt svg {
+  width: 1.1em;
+  height: 1.1em;
 }
 
 .snap-logo__win {
   color: var(--snap-lime);
+  text-transform: lowercase;
+  font-weight: 800;
 }
 
 .snap-tagline {
-  margin: 4px 0 0;
-  font-size: 14px;
+  margin: 0.2rem 0 0;
+  font-size: clamp(0.85rem, 3.5vw, 0.95rem);
+  font-weight: 500;
+}
+
+.snap-tagline__live {
+  color: rgba(255, 255, 255, 0.88);
+  text-transform: lowercase;
+}
+
+.snap-tagline__exp {
+  color: var(--snap-burgundy);
+  text-transform: lowercase;
+  font-weight: 600;
 }
 
 .snap-location {
-  margin: 8px 0 0;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.snap-location svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }

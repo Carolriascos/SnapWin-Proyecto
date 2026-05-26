@@ -1,21 +1,32 @@
 .snap-title {
-  margin: 0 0 8px;
-  font-size: 22px;
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.5rem, 6vw, 1.75rem);
+  font-weight: 800;
   text-align: center;
+  line-height: 1.15;
 }
 
 .snap-subtitle {
-  margin: 0 0 16px;
-  font-size: 14px;
+  margin: 0 0 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 400;
   text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
 }
 
 .snap-title--sm {
-  font-size: 18px;
+  font-size: 1rem;
+  margin-top: 0.5rem;
+}
+
+.snap-title--xs {
+  font-size: 1.1rem;
 }
 
 .snap-error {
-  color: #f66;
-  font-size: 14px;
+  color: #ff6b6b;
+  font-size: 0.8rem;
   text-align: center;
+  margin: 0.75rem 0 0;
 }

@@ -1,24 +1,75 @@
+/* logo en pantalla del centro comercial */
 .mall-header {
+  position: relative;
+  z-index: 2;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 1.5rem;
 }
 
 .mall-location {
-  font-size: 14px;
-  margin-bottom: 8px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mall-location svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.mall-brand {
+  padding-top: 0.25rem;
 }
 
 .mall-logo {
   margin: 0;
-  font-size: 28px;
-  font-weight: bold;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 800;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.mall-logo__snap,
+.mall-logo__n {
+  color: var(--mall-white);
+  text-transform: lowercase;
+}
+
+.mall-logo__bolt {
+  display: inline-flex;
+  margin: 0 0.05em;
+  transform: translateY(-0.06em);
+}
+
+.mall-logo__bolt svg {
+  width: 1em;
+  height: 1em;
 }
 
 .mall-logo__win {
-  color: #9f0;
+  color: var(--mall-lime);
+  text-transform: lowercase;
+  font-weight: 800;
 }
 
 .mall-tagline {
-  margin: 4px 0 0;
-  font-size: 14px;
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}
+
+.mall-tagline__live {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mall-tagline__exp {
+  color: var(--mall-burgundy);
+  font-weight: 600;
 }
