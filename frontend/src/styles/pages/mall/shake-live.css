@@ -76,8 +76,8 @@
 
 .mall-board {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 4px;
   padding: 1rem;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 12px;
@@ -89,7 +89,21 @@
   width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
-  min-width: 8px;
+  min-width: 6px;
+  max-width: 18px;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.mall-board__dot--filled {
+  transform: scale(1.15);
+  box-shadow: 0 0 6px currentColor;
+  animation: dot-pop 0.2s ease;
+}
+
+@keyframes dot-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.35); }
+  100% { transform: scale(1.15); }
 }
 
 .mall-shake__hint-box {

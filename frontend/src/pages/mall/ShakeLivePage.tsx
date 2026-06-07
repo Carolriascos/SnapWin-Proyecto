@@ -15,7 +15,7 @@ export default function ShakeLivePage() {
   const [scores, setScores] = useState<Record<string, JugadorScore>>({});
   const [countdown, setCountdown] = useState<number | null>(null);
   const totalPuntosRef = useRef<Record<string, number>>({});
-  const BOARD_DOTS = 80;
+  const BOARD_DOTS = 200;
 
   useEffect(() => {
     const emitJoin = () => {
@@ -39,7 +39,6 @@ export default function ShakeLivePage() {
               puntos: totalPuntosRef.current[j.id] ?? 0,
             };
           } else if (j.color && j.color !== '#888') {
-            // actualizar color si llegó uno válido
             next[j.id] = { ...next[j.id], color: j.color };
           }
         });
@@ -74,7 +73,6 @@ export default function ShakeLivePage() {
     .filter(([id]) => id !== 'mall-screen')
     .sort(([, a], [, b]) => b.puntos - a.puntos);
 
-  // Construir dots: empieza vacío, se llena con colores proporcional a puntos
   const totalPuntos = ordenados.reduce((s, [, j]) => s + j.puntos, 0);
   const dots: string[] = Array(BOARD_DOTS).fill('empty');
 
@@ -107,7 +105,6 @@ export default function ShakeLivePage() {
       )}
 
       <div className="mall-shake__layout">
-        {/* Lateral izquierdo: 2do y 3er lugar */}
         <aside>
           {ordenados.slice(1, 3).map(([id, j], i) => (
             <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
@@ -121,7 +118,6 @@ export default function ShakeLivePage() {
           ))}
         </aside>
 
-        {/* Centro: tablero de dots */}
         <div style={{ flex: 1 }}>
           {ordenados.length === 0 ? (
             <p className="mall-shake__empty">Esperando jugadores...</p>
@@ -130,7 +126,7 @@ export default function ShakeLivePage() {
               {dots.map((color, i) => (
                 <span
                   key={i}
-                  className="mall-board__dot"
+                  className={`mall-board__dot${color !== 'empty' ? ' mall-board__dot--filled' : ''}`}
                   style={{
                     background: color === 'empty' ? 'transparent' : color,
                     border: color === 'empty' ? '1.5px solid #333' : 'none',
@@ -141,7 +137,6 @@ export default function ShakeLivePage() {
             </div>
           )}
 
-          {/* Top 3 debajo del tablero — visible para todos */}
           {ordenados.length > 0 && (
             <div style={{
               display: 'flex', justifyContent: 'center', gap: '1.5rem',
@@ -166,7 +161,6 @@ export default function ShakeLivePage() {
           </div>
         </div>
 
-        {/* Lateral derecho: 1er lugar */}
         <aside>
           {ordenados[0] && (() => {
             const [id, j] = ordenados[0];

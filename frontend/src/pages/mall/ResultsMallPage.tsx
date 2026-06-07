@@ -2,74 +2,51 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSocket } from "../../hooks/useSocket";
 import MallHeader from "../../components/MallHeader";
-import { API_BASE } from "../../config/api";
 
-const SALA_ID = "sala-001";
-
-interface PartidaEntry {
-  jugador_id: string;
+interface JugadorResult {
+  jugadorId: string;
+  nombre: string;
   puntos: number;
-  juego: string;
-  jugadores?: { nombre: string; color?: string };
+  color?: string;
 }
 
 export default function ResultsMallPage() {
   const navigate = useNavigate();
   const socket = useSocket();
-  const [shakeTop, setShakeTop] = useState<PartidaEntry[]>([]);
-  const [dodgeTop, setDodgeTop] = useState<PartidaEntry[]>([]);
-  const [terminados, setTerminados] = useState(0);
+  const [resultados, setResultados] = useState<JugadorResult[]>([]);
   const [animando, setAnimando] = useState(false);
 
-  const cargarRanking = async () => {
-    const res = await fetch(`${API_BASE}/scores/ranking/${SALA_ID}`);
-    const data = await res.json();
-    if (data.success) {
-      
-      const todas: PartidaEntry[] = data.data;
-      setShakeTop(todas.filter(p => p.juego === 'shake').slice(0, 3));
-      setDodgeTop(todas.filter(p => p.juego === 'dodge').slice(0, 3));
-    }
-  };
-
   useEffect(() => {
-    cargarRanking();
-
-    socket.on("player-finished", () => {
-      setTerminados((prev) => prev + 1);
+    socket.on("player-finished", (data: { jugadorId: string; puntos: number; nombre?: string; color?: string }) => {
+      setResultados(prev => {
+        const existe = prev.find(j => j.jugadorId === data.jugadorId);
+        if (existe) {
+          return prev.map(j => j.jugadorId === data.jugadorId ? { ...j, puntos: data.puntos } : j);
+        }
+        return [...prev, {
+          jugadorId: data.jugadorId,
+          nombre: data.nombre ?? 'Jugador',
+          puntos: data.puntos,
+          color: data.color,
+        }];
+      });
       setAnimando(true);
       setTimeout(() => setAnimando(false), 600);
-      cargarRanking();
     });
 
-    return () => { socket.off("player-finished"); };
+    socket.on("final-ranking", (ranking: JugadorResult[]) => {
+      setResultados(ranking);
+    });
+
+    return () => {
+      socket.off("player-finished");
+      socket.off("final-ranking");
+    };
   }, [socket]);
 
+  const ordenados = [...resultados].sort((a, b) => b.puntos - a.puntos);
   const medallas = ["🥇", "🥈", "🥉"];
   const podiumOrder = [1, 0, 2];
-
-  const renderPodium = (lista: PartidaEntry[]) => {
-    if (lista.length === 0) return <p style={{ color: '#888', textAlign: 'center' }}>Sin resultados aún</p>;
-    return (
-      <div className="mall-podium">
-        {podiumOrder.map((idx) => {
-          const j = lista[idx];
-          if (!j) return null;
-          return (
-            <div
-              key={j.jugador_id}
-              className={`mall-podium__place mall-podium__place--${idx + 1}`}
-              style={{ opacity: animando ? 0.85 : 1 }}
-            >
-              <span className="mall-podium__medal">{medallas[idx]}</span>
-              <span className="mall-podium__name">{j.jugadores?.nombre ?? "Jugador"}</span>
-              <span className="mall-podium__pts">{j.puntos} pts</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
 
   return (
     <div className="mall-screen mall-results">
@@ -78,31 +55,52 @@ export default function ResultsMallPage() {
 
       <h1 className="mall-results__title">WINNERS!</h1>
 
-      {terminados > 0 && (
-        <p className="mall-results__sub">
-          {terminados} jugador{terminados !== 1 ? "es" : ""} terminó la partida
-        </p>
+      <p className="mall-results__sub">
+        {ordenados.length} jugador{ordenados.length !== 1 ? "es" : ""} en esta partida
+      </p>
+
+      {ordenados.length === 0 ? (
+        <p className="mall-results__empty">Esperando resultados...</p>
+      ) : (
+        <div className="mall-results__columns">
+          <section className="mall-results__section">
+            <div className="mall-podium">
+              {podiumOrder.map((idx) => {
+                const j = ordenados[idx];
+                if (!j) return null;
+                return (
+                  <div
+                    key={j.jugadorId}
+                    className={`mall-podium__place mall-podium__place--${idx + 1}`}
+                    style={{ opacity: animando ? 0.85 : 1, borderColor: j.color }}
+                  >
+                    <span className="mall-podium__medal">{medallas[idx]}</span>
+                    <span className="mall-podium__name">{j.nombre}</span>
+                    <span className="mall-podium__pts">{j.puntos.toLocaleString()} pts</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxWidth: 400, margin: '1.5rem auto 0' }}>
+              {ordenados.map((j, i) => (
+                <div key={j.jugadorId} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  background: 'rgba(255,255,255,0.05)', borderRadius: 8,
+                  padding: '8px 16px', border: `1px solid ${j.color ?? '#555'}`
+                }}>
+                  <span style={{ fontSize: '1.1rem' }}>{medallas[i] ?? `${i + 1}.`}</span>
+                  {j.color && <span style={{ width: 10, height: 10, borderRadius: '50%', background: j.color, flexShrink: 0 }} />}
+                  <span style={{ flex: 1, fontWeight: 'bold', fontSize: '0.95rem' }}>{j.nombre}</span>
+                  <span style={{ color: '#a3e635', fontWeight: 800 }}>{j.puntos.toLocaleString()} pts</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       )}
 
-      <div className="mall-results__columns">
-        {shakeTop.length > 0 && (
-          <section className="mall-results__section">
-            <h2>SHAKE BATTLE</h2>
-            {renderPodium(shakeTop)}
-          </section>
-        )}
-        {dodgeTop.length > 0 && (
-          <section className="mall-results__section">
-            <h2>DODGE GAME</h2>
-            {renderPodium(dodgeTop)}
-          </section>
-        )}
-        {shakeTop.length === 0 && dodgeTop.length === 0 && (
-          <p className="mall-results__empty">Esperando resultados...</p>
-        )}
-      </div>
-
-      <button type="button" className="mall-btn-primary" onClick={() => navigate("/mall")}>
+      <button type="button" className="mall-btn-primary" onClick={() => navigate("/mall")} style={{ marginTop: '2rem' }}>
         Nueva ronda
       </button>
     </div>
