@@ -1,11 +1,9 @@
 import { Server } from "socket.io";
-import { SupabaseClient } from "../clients/SupabaseClient";
 
-/* Maneja toda la comunicación en tiempo real del juego.*/
 export const setupSocket = (io: Server) => {
   const salas: Map<string, any[]> = new Map();
   const salaGameMode: Map<string, "shake" | "dodge"> = new Map();
-
+  const salaCountdownStarted: Map<string, boolean> = new Map(); 
   io.on("connection", (socket) => {
     console.log(` Cliente conectado: ${socket.id}`);
 
@@ -32,8 +30,10 @@ export const setupSocket = (io: Server) => {
       io.to(salaId).emit("players-update", jugadoresEnSala);
       console.log(`👤 ${jugador.nombre} se unió a sala ${salaId}`);
 
-      // si hay 2 o más jugadores, iniciar cuenta regresiva
-      if (jugadoresEnSala.length >= 2) {
+      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen").length;
+
+      if (humanos >= 2 && !salaCountdownStarted.get(salaId)) {
+        salaCountdownStarted.set(salaId, true);
         startCountdown(io, salaId, salaGameMode);
       }
     });
@@ -46,7 +46,6 @@ export const setupSocket = (io: Server) => {
       });
     });
 
-    //  Ángulo de inclinación — Dodge Game
     socket.on(
       "dodge-data",
       (data: { salaId: string; jugadorId: string; angulo?: number; posicion?: number; carril?: number }) => {
@@ -59,7 +58,6 @@ export const setupSocket = (io: Server) => {
       }
     );
 
-    //  Fin del juego de un jugador
     socket.on("game-over", async (data: { salaId: string; jugadorId: string; puntos: number }) => {
       io.to(data.salaId).emit("player-finished", {
         jugadorId: data.jugadorId,
@@ -75,12 +73,13 @@ export const setupSocket = (io: Server) => {
     socket.on("disconnect", () => {
       console.log(` Cliente desconectado: ${socket.id}`);
 
-      // Eliminar jugador de todas las salas
       salas.forEach((jugadores, salaId) => {
         const actualizados = jugadores.filter((j) => j.socketId !== socket.id);
         salas.set(salaId, actualizados);
-        if (actualizados.filter((j) => j.id !== "mall-screen").length === 0) {
+        const humanosActuales = actualizados.filter((j) => j.id !== "mall-screen").length;
+        if (humanosActuales === 0) {
           salaGameMode.delete(salaId);
+          salaCountdownStarted.delete(salaId);
         }
         io.to(salaId).emit("players-update", actualizados);
       });
@@ -89,7 +88,7 @@ export const setupSocket = (io: Server) => {
 };
 
 const startCountdown = (io: Server, salaId: string, salaGameMode?: Map<string, "shake" | "dodge">) => {
-  let count = 10;
+  let count = 30; 
 
   const interval = setInterval(() => {
     io.to(salaId).emit("countdown", { count });

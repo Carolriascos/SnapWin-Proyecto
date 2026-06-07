@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSocket } from "../../hooks/useSocket";
 import { useNavigate } from 'react-router-dom'
 import MallHeader from '../../components/MallHeader'
@@ -9,13 +9,12 @@ interface JugadorScore {
   puntos: number;
 }
 
-const BOARD_DOTS = 72
-const DOT_COLORS = ["#db2777", "#ea580c", "#16a34a", "#7c3aed"]
-
 export default function ShakeLivePage() {
   const socket   = useSocket();
   const navigate = useNavigate();
   const [scores, setScores] = useState<Record<string, JugadorScore>>({});
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const totalPuntosRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const emitJoin = () => {
@@ -47,10 +46,21 @@ export default function ShakeLivePage() {
     });
 
     socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
+      totalPuntosRef.current[jugadorId] = (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza);
       setScores((prev) => {
         if (!prev[jugadorId]) return prev;
-        return { ...prev, [jugadorId]: { ...prev[jugadorId], puntos: prev[jugadorId].puntos + Math.round(fuerza) } };
+        return { 
+          ...prev, 
+          [jugadorId]: { 
+            ...prev[jugadorId], 
+            puntos: totalPuntosRef.current[jugadorId] 
+          } 
+        };
       });
+    });
+
+    socket.on("countdown", ({ count }: { count: number }) => {
+      setCountdown(count);
     });
 
     socket.on("player-finished", () => {
@@ -61,6 +71,7 @@ export default function ShakeLivePage() {
       socket.off('connect', emitJoin)
       socket.off("players-update");
       socket.off("score-update");
+      socket.off("countdown");
       socket.off("player-finished");
     };
   }, [socket, navigate]);
@@ -69,17 +80,27 @@ export default function ShakeLivePage() {
     .filter(([id]) => id !== 'mall-screen')
     .sort(([, a], [, b]) => b.puntos - a.puntos);
 
-  const left = ordenados.slice(1, 3)
-  const right = [ordenados[0], ordenados[3]].filter(Boolean) as [string, JugadorScore][]
-  const ranks = ['2do lugar', '3er lugar', '1er lugar', '4to lugar']
+  const totalPuntos = ordenados.reduce((sum, [, j]) => sum + j.puntos, 0);
+  const BOARD_DOTS = 80;
 
-  const renderCard = ([id, j]: [string, JugadorScore], rankLabel: string) => (
-    <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
-      <p className="mall-leader-card__name">{j.nombre}</p>
-      <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
-      <p className="mall-leader-card__rank">{rankLabel}</p>
-    </div>
-  )
+  const dotsPerJugador: { color: string; count: number }[] = ordenados.map(([, j]) => ({
+    color: j.color,
+    count: totalPuntos > 0 ? Math.round((j.puntos / totalPuntos) * BOARD_DOTS) : 0,
+  }));
+
+  const allDots: string[] = [];
+  dotsPerJugador.forEach(({ color, count }) => {
+    for (let i = 0; i < count; i++) allDots.push(color);
+  });
+  while (allDots.length < BOARD_DOTS) allDots.push("#333");
+
+  const getRankLabel = (index: number, total: number) => {
+    if (total === 0) return '';
+    if (index === 0) return '🥇 1er lugar';
+    if (index === 1) return '🥈 2do lugar';
+    if (index === 2) return '🥉 3er lugar';
+    return 'No estás en el top 3';
+  };
 
   return (
     <div className="mall-screen mall-shake">
@@ -91,38 +112,55 @@ export default function ShakeLivePage() {
         <span className="mall-mode-tag">SHAKE BATTLE</span>
       </div>
 
+      {countdown !== null && countdown > 0 && (
+        <div style={{ textAlign: 'center', fontSize: '1.5rem', color: '#a855f7', marginBottom: '0.5rem' }}>
+          ⏳ El juego empieza en {countdown}s
+        </div>
+      )}
+
       <div className="mall-shake__layout">
+        {}
         <aside>
-          <p className="mall-shake__timer">
-            00:30
-            <small>TIEMPO RESTANTE</small>
-          </p>
-          {left.map(([id, j], i) => renderCard([id, j], ranks[i + 1] ?? ''))}
+          {ordenados.slice(1, 3).map(([id, j], i) => (
+            <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
+              <p className="mall-leader-card__name">{j.nombre}</p>
+              <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
+              <p className="mall-leader-card__rank">{getRankLabel(i + 1, ordenados.length)}</p>
+            </div>
+          ))}
         </aside>
 
+        {}
         <div>
           {ordenados.length === 0 ? (
-            <p className="mall-shake__empty">Esperando puntajes...</p>
+            <p className="mall-shake__empty">Esperando jugadores...</p>
           ) : (
             <div className="mall-board" aria-hidden>
-              {Array.from({ length: BOARD_DOTS }, (_, i) => (
+              {allDots.map((color, i) => (
                 <span
                   key={i}
                   className="mall-board__dot"
-                  style={{ background: DOT_COLORS[i % DOT_COLORS.length] }}
+                  style={{ background: color }}
                 />
               ))}
             </div>
           )}
           <div className="mall-shake__hint-box">
-             agita tu celular más fuerte!
+            ¡agita tu celular más fuerte!
           </div>
         </div>
 
+        {}
         <aside>
-          {right.map(([id, j], i) =>
-            renderCard([id, j], i === 0 ? ranks[2] : ranks[3])
-          )}
+          {[ordenados[0], ordenados[3]].filter(Boolean).map(([id, j], i) => (
+            <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
+              <p className="mall-leader-card__name">{j.nombre}</p>
+              <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
+              <p className="mall-leader-card__rank">
+                {i === 0 ? getRankLabel(0, ordenados.length) : getRankLabel(3, ordenados.length)}
+              </p>
+            </div>
+          ))}
         </aside>
       </div>
     </div>
