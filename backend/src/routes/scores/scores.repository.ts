@@ -1,14 +1,14 @@
 import { SupabaseClient } from "../../clients/SupabaseClient"
 import { ScorePayload, ApiResponse } from "../../types/types"
 
-/* Obtiene el top 3 de puntajes de una sala, Ordenado de mayor a menor puntaje. */
+
 const getTop3 = async (salaId: string): Promise<ApiResponse<any[]>> => {
   const { data, error } = await SupabaseClient
     .from("partidas")
-    .select("jugador_id, puntos, jugadores(nombre, color)")
+    .select("jugador_id, puntos, juego, jugadores(nombre, color)")
     .eq("sala_id", salaId)
     .order("puntos", { ascending: false })
-    .limit(3)
+    .limit(20)
 
   if (error) {
     console.error("Error al obtener ranking:", error)
