@@ -20,15 +20,7 @@ export default function WaitingPage() {
     const nombre    = localStorage.getItem('nombre')    ?? 'Jugador'
     const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
 
-    console.log('--- WaitingPage montado ---')
-    console.log('jugadorId:', jugadorId)
-    console.log('nombre:', nombre)
-    console.log('salaId:', salaId)
-    console.log('socket conectado:', socket.connected)
-    console.log('socket id:', socket.id)
-
     const emitJoin = () => {
-      console.log('Emitiendo join-sala...')
       socket.emit('join-sala', {
         salaId,
         jugador: { id: jugadorId, nombre, gameMode: getGameMode() },
@@ -38,23 +30,21 @@ export default function WaitingPage() {
     if (socket.connected) {
       emitJoin()
     } else {
-      console.log('Socket no conectado, esperando connect...')
       socket.on('connect', emitJoin)
     }
 
     socket.on('players-update', (data: any) => {
-      console.log('players-update recibido:', data)
-      setJugadores(data)
+      
+      const soloJugadores = data.filter((j: any) => j.id !== 'mall-screen')
+      setJugadores(soloJugadores)
     })
 
     socket.on('countdown', ({ count }: { count: number }) => {
-      console.log('countdown:', count)
       setCountdown(count)
     })
 
     socket.on('game-start', ({ game }: { game?: string }) => {
       const modo = game === 'dodge' || game === 'shake' ? game : getGameMode()
-      console.log('game-start recibido!', modo)
       navigate(modo === 'dodge' ? '/dodge' : '/shake')
     })
 
@@ -67,7 +57,7 @@ export default function WaitingPage() {
   }, [socket, navigate])
 
   const progressPct =
-    countdown !== null && countdown > 0 ? ((4 - Math.min(countdown, 3)) / 3) * 100 : 60
+    countdown !== null && countdown > 0 ? ((30 - Math.min(countdown, 30)) / 30) * 100 : 0
 
   return (
     <div className="snap-screen">
@@ -87,6 +77,11 @@ export default function WaitingPage() {
                 ))}
               </div>
             </div>
+            <p style={{ color: '#a855f7', marginTop: '1rem', fontSize: '0.9rem' }}>
+              {jugadores.length < 2
+                ? 'Esperando al menos 2 jugadores...'
+                : '¡Listo! El juego arrancará pronto'}
+            </p>
             <div className="waiting-dots" aria-hidden>
               <span /><span /><span />
             </div>

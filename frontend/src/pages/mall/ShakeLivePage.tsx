@@ -76,10 +76,12 @@ export default function ShakeLivePage() {
     };
   }, [socket, navigate]);
 
+  
   const ordenados = Object.entries(scores)
     .filter(([id]) => id !== 'mall-screen')
     .sort(([, a], [, b]) => b.puntos - a.puntos);
 
+  
   const totalPuntos = ordenados.reduce((sum, [, j]) => sum + j.puntos, 0);
   const BOARD_DOTS = 80;
 
@@ -92,6 +94,7 @@ export default function ShakeLivePage() {
   dotsPerJugador.forEach(({ color, count }) => {
     for (let i = 0; i < count; i++) allDots.push(color);
   });
+  
   while (allDots.length < BOARD_DOTS) allDots.push("#333");
 
   const getRankLabel = (index: number, total: number) => {
@@ -119,7 +122,7 @@ export default function ShakeLivePage() {
       )}
 
       <div className="mall-shake__layout">
-        {}
+        
         <aside>
           {ordenados.slice(1, 3).map(([id, j], i) => (
             <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
@@ -130,7 +133,7 @@ export default function ShakeLivePage() {
           ))}
         </aside>
 
-        {}
+        
         <div>
           {ordenados.length === 0 ? (
             <p className="mall-shake__empty">Esperando jugadores...</p>
@@ -150,7 +153,7 @@ export default function ShakeLivePage() {
           </div>
         </div>
 
-        {}
+        
         <aside>
           {[ordenados[0], ordenados[3]].filter(Boolean).map(([id, j], i) => (
             <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
