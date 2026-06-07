@@ -1,77 +1,79 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import emailjs from '@emailjs/browser'
-import { ScoreEntry, Coupon } from '../../types'
+import { Coupon } from '../../types'
 import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
+import { useSocket } from '../../hooks/useSocket'
 
 const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID
 const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
 const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
 
-function enviarCuponPorCorreo(cupon: Coupon) {
-  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
-    console.warn('EmailJS: faltan variables en frontend/.env')
-    return
-  }
-  const correo = localStorage.getItem('correo') ?? ''
-  if (!correo) {
-    console.warn('EmailJS: no hay correo del jugador en localStorage')
-    return
-  }
-  emailjs
-    .send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_ID,
-      {
-        to_email: correo,
-        nombre: localStorage.getItem('nombre') ?? 'Jugador',
-        correo,
-        codigo: cupon.codigo,
-        nivel: cupon.nivel,
-        descuento: String(cupon.descuento),
-      },
-      EMAILJS_PUBLIC_KEY
-    )
-    .catch(err => console.error('EmailJS error:', err))
+interface JugadorRanking {
+  jugadorId: string
+  nombre: string
+  puntos: number
+  color?: string
 }
 
-/** Pantalla de resultado — muestra top 3 y el cupón si ganó */
+function enviarCuponPorCorreo(cupon: Coupon) {
+  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) return
+  const correo = localStorage.getItem('correo') ?? ''
+  if (!correo) return
+  emailjs.send(
+    EMAILJS_SERVICE_ID,
+    EMAILJS_TEMPLATE_ID,
+    {
+      to_email: correo,
+      nombre: localStorage.getItem('nombre') ?? 'Jugador',
+      correo,
+      codigo: cupon.codigo,
+      nivel: cupon.nivel,
+      descuento: String(cupon.descuento),
+    },
+    EMAILJS_PUBLIC_KEY
+  ).catch(err => console.error('EmailJS error:', err))
+}
+
 export default function ResultPage() {
   const navigate  = useNavigate()
-  const [top3, setTop3]     = useState<ScoreEntry[]>([])
-  const [cupon, setCupon]   = useState<Coupon | null>(null)
-  const jugadorId = localStorage.getItem('jugadorId')
+  const socket    = useSocket()
+  const [ranking, setRanking] = useState<JugadorRanking[]>([])
+  const [cupon, setCupon]     = useState<Coupon | null>(null)
+  const jugadorId = localStorage.getItem('jugadorId') ?? ''
   const salaId    = localStorage.getItem('salaId') ?? 'sala-001'
 
   useEffect(() => {
-    const cargar = async () => {
-      const res  = await fetch(`${API_BASE}/scores/ranking/${salaId}`)
-      const data = await res.json()
-      if (!data.success) return
-      setTop3(data.data)
+    // Escuchar ranking de la partida actual via socket
+    socket.on('ranking-partida', (data: JugadorRanking[]) => {
+      if (data.length === 0) return
+      setRanking(data)
 
-      // Si el jugador está en top 3, generar cupón
-      const posicion = data.data.findIndex((j: ScoreEntry) => j.jugador_id === jugadorId) + 1
-      if (posicion >= 1 && posicion <= 3) {
-        const r  = await fetch(`${API_BASE}/coupons/generate`, {
+      // Generar cupón si está en top 3
+      const posicion = data.findIndex(j => j.jugadorId === jugadorId) + 1
+      if (posicion >= 1 && posicion <= 3 && !cupon) {
+        fetch(`${API_BASE}/coupons/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jugadorId, posicion })
         })
-        const cd = await r.json()
-        if (cd.success) {
-          setCupon(cd.data)
-          enviarCuponPorCorreo(cd.data)
-        }
+          .then(r => r.json())
+          .then(cd => {
+            if (cd.success) {
+              setCupon(cd.data)
+              enviarCuponPorCorreo(cd.data)
+            }
+          })
       }
-    }
-    cargar()
-  }, [jugadorId, salaId])
+    })
+
+    return () => { socket.off('ranking-partida') }
+  }, [socket, jugadorId, salaId, cupon])
 
   const medallas = ['🥇', '🥈', '🥉']
-  const posicion = top3.findIndex(j => j.jugador_id === jugadorId) + 1
-  const misPuntos = top3.find(j => j.jugador_id === jugadorId)?.puntos ?? 0
+  const posicion = ranking.findIndex(j => j.jugadorId === jugadorId) + 1
+  const misPuntos = ranking.find(j => j.jugadorId === jugadorId)?.puntos ?? 0
   const lugares = ['', 'PRIMER LUGAR', 'SEGUNDO LUGAR', 'TERCER LUGAR']
 
   return (
@@ -96,11 +98,10 @@ export default function ResultPage() {
               <span className="result-code">{cupon.codigo}</span>
             </div>
             <div className="result-email-box">
-              Cupón enviado a
-              <strong>{localStorage.getItem('correo') ?? 'tu correo'}</strong>
+              Cupón enviado a <strong>{localStorage.getItem('correo') ?? 'tu correo'}</strong>
             </div>
           </>
-        ) : (
+        ) : posicion > 3 ? (
           <>
             <div className="result-status result-status--lose">
               <h2>¡Casi lo logras!</h2>
@@ -110,20 +111,26 @@ export default function ResultPage() {
               <p className="result-points__value">{misPuntos.toLocaleString()}</p>
               <p className="result-points__label">Tus puntos</p>
             </div>
-            <div className="result-miss-card">
-              <p className="result-miss-card__title">Te faltó</p>
-              <p className="result-miss-card__pts">—</p>
-              <p className="result-miss-card__sub">Para alcanzar el tercer lugar</p>
+          </>
+        ) : (
+          <div className="result-status result-status--lose">
+            <h2>Calculando resultado...</h2>
+            <p>Espera un momento</p>
+          </div>
+        )}
+
+        {ranking.length > 0 && (
+          <>
+            <h2 className="snap-title snap-title--sm">Top 3 — Esta partida</h2>
+            <div className="result-ranking">
+              {ranking.slice(0, 3).map((j, i) => (
+                <p key={j.jugadorId}>
+                  {medallas[i]} {j.nombre} — {j.puntos.toLocaleString()} pts
+                </p>
+              ))}
             </div>
           </>
         )}
-
-        <h2 className="snap-title snap-title--sm">Top 3</h2>
-        <div className="result-ranking">
-          {top3.map((j, i) => (
-            <p key={j.jugador_id}>{medallas[i]} {j.jugadores?.nombre ?? 'Jugador'} — {j.puntos} pts</p>
-          ))}
-        </div>
       </main>
       <div className="snap-footer-actions">
         <button type="button" className="btn-primary" onClick={() => navigate('/final-round')}>

@@ -9,13 +9,17 @@ interface JugadorScore {
   puntos: number;
 }
 
+// Posiciones aleatorias fijas para los dots — se generan una sola vez
+const TOTAL_DOTS = 180;
+const posicionesAleatorias = Array.from({ length: TOTAL_DOTS }, (_, i) => i)
+  .sort(() => Math.random() - 0.5);
+
 export default function ShakeLivePage() {
   const socket   = useSocket();
   const navigate = useNavigate();
   const [scores, setScores] = useState<Record<string, JugadorScore>>({});
   const [countdown, setCountdown] = useState<number | null>(null);
   const totalPuntosRef = useRef<Record<string, number>>({});
-  const BOARD_DOTS = 200;
 
   useEffect(() => {
     const emitJoin = () => {
@@ -29,18 +33,14 @@ export default function ShakeLivePage() {
 
     socket.on("players-update", (jugadores: any[]) => {
       setScores(prev => {
-        const next = { ...prev };
+        const next: Record<string, JugadorScore> = {};
         jugadores.forEach(j => {
           if (j.id === 'mall-screen') return;
-          if (!next[j.id]) {
-            next[j.id] = {
-              nombre: j.nombre || "Jugador",
-              color: j.color || "#888",
-              puntos: totalPuntosRef.current[j.id] ?? 0,
-            };
-          } else if (j.color && j.color !== '#888') {
-            next[j.id] = { ...next[j.id], color: j.color };
-          }
+          next[j.id] = {
+            nombre: j.nombre || "Jugador",
+            color: j.color || "#888",
+            puntos: prev[j.id]?.puntos ?? totalPuntosRef.current[j.id] ?? 0,
+          };
         });
         return next;
       });
@@ -60,12 +60,21 @@ export default function ShakeLivePage() {
     socket.on("countdown", ({ count }: { count: number }) => setCountdown(count));
     socket.on("player-finished", () => setTimeout(() => navigate("/mall/results"), 4000));
 
+    // Limpiar al iniciar nueva ronda
+    socket.on("ranking-partida", (ranking: any[]) => {
+      if (ranking.length === 0) {
+        setScores({});
+        totalPuntosRef.current = {};
+      }
+    });
+
     return () => {
       socket.off('connect', emitJoin);
       socket.off("players-update");
       socket.off("score-update");
       socket.off("countdown");
       socket.off("player-finished");
+      socket.off("ranking-partida");
     };
   }, [socket, navigate]);
 
@@ -74,14 +83,15 @@ export default function ShakeLivePage() {
     .sort(([, a], [, b]) => b.puntos - a.puntos);
 
   const totalPuntos = ordenados.reduce((s, [, j]) => s + j.puntos, 0);
-  const dots: string[] = Array(BOARD_DOTS).fill('empty');
 
+  // Construir dots con posiciones aleatorias — vacío al inicio
+  const dots: string[] = Array(TOTAL_DOTS).fill('empty');
   if (totalPuntos > 0) {
-    let idx = 0;
+    let posIdx = 0;
     ordenados.forEach(([, j]) => {
-      const count = Math.round((j.puntos / totalPuntos) * BOARD_DOTS);
-      for (let i = 0; i < count && idx < BOARD_DOTS; i++, idx++) {
-        dots[idx] = j.color;
+      const count = Math.round((j.puntos / totalPuntos) * TOTAL_DOTS);
+      for (let i = 0; i < count && posIdx < TOTAL_DOTS; i++, posIdx++) {
+        dots[posicionesAleatorias[posIdx]] = j.color;
       }
     });
   }
@@ -113,35 +123,27 @@ export default function ShakeLivePage() {
                 <p className="mall-leader-card__name">{j.nombre}</p>
               </div>
               <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
-              <p className="mall-leader-card__rank">{getMedal(i + 1)} {i + 1 === 1 ? '2do lugar' : '3er lugar'}</p>
+              <p className="mall-leader-card__rank">{getMedal(i + 1)} {i === 0 ? '2do lugar' : '3er lugar'}</p>
             </div>
           ))}
         </aside>
 
         <div style={{ flex: 1 }}>
-          {ordenados.length === 0 ? (
-            <p className="mall-shake__empty">Esperando jugadores...</p>
-          ) : (
-            <div className="mall-board" aria-hidden>
-              {dots.map((color, i) => (
-                <span
-                  key={i}
-                  className={`mall-board__dot${color !== 'empty' ? ' mall-board__dot--filled' : ''}`}
-                  style={{
-                    background: color === 'empty' ? 'transparent' : color,
-                    border: color === 'empty' ? '1.5px solid #333' : 'none',
-                    transition: 'background 0.25s ease',
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          <div className="mall-board" aria-hidden>
+            {dots.map((color, i) => (
+              <span
+                key={i}
+                className={`mall-board__dot${color !== 'empty' ? ' mall-board__dot--filled' : ''}`}
+                style={{
+                  background: color === 'empty' ? 'transparent' : color,
+                  border: color === 'empty' ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                }}
+              />
+            ))}
+          </div>
 
           {ordenados.length > 0 && (
-            <div style={{
-              display: 'flex', justifyContent: 'center', gap: '1.5rem',
-              marginTop: '1rem', flexWrap: 'wrap'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
               {ordenados.slice(0, 3).map(([id, j], i) => (
                 <div key={id} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
