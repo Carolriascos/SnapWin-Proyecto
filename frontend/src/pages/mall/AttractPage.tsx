@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import MallHeader from '../../components/MallHeader'
 import { getPlayerAppUrl } from '../../utils/playerAppUrl'
 
-/** Pantalla de atracción del mall — muestra QR  */
+
 export default function AttractPage() {
   const navigate = useNavigate()
   const [urlJugador, setUrlJugador] = useState('')

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { useSocket } from "../../hooks/useSocket";
-import { useNavigate } from 'react-router-dom'
-import MallHeader from '../../components/MallHeader'
+import { useEffect, useRef, useState } from 'react';
+import { useSocket } from '../../hooks/useSocket';
+import { useNavigate } from 'react-router-dom';
+import MallHeader from '../../components/MallHeader';
 
 interface JugadorScore {
   nombre: string;
@@ -13,28 +13,55 @@ interface BoardDot {
   id: string;
   color: string;
   x: number;
-  y: number;
+  y: number; 
 }
 
-function randomPosition(): { x: number; y: number } {
-  return {
-    x: 4 + Math.random() * 92,
-    y: 4 + Math.random() * 92,
-  };
+
+const DOT_RADIUS_PCT = 2.6;
+const MAX_ATTEMPTS   = 120;
+const MARGIN         = DOT_RADIUS_PCT + 0.5;
+
+
+function findFreePosition(
+  existing: BoardDot[],
+): { x: number; y: number } | null {
+  const minDist = DOT_RADIUS_PCT * 2; 
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const x = MARGIN + Math.random() * (100 - MARGIN * 2);
+    const y = MARGIN + Math.random() * (100 - MARGIN * 2);
+
+    
+    const overlaps = existing.some((d) => {
+      const dx = d.x - x;
+      const dy = d.y - y;
+      const dist = Math.sqrt(dx * dx + (dy * dy * 4));
+      return dist < minDist;
+    });
+
+    if (!overlaps) return { x, y };
+  }
+
+  return null;
 }
 
 export default function ShakeLivePage() {
   const socket   = useSocket();
   const navigate = useNavigate();
-  const [scores, setScores] = useState<Record<string, JugadorScore>>({});
-  const [dots, setDots] = useState<BoardDot[]>([]);
+
+  const [scores,    setScores]    = useState<Record<string, JugadorScore>>({});
+  const [dots,      setDots]      = useState<BoardDot[]>([]);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const totalPuntosRef = useRef<Record<string, number>>({});
-  const playerColorsRef = useRef<Record<string, string>>({});
-  const rankingRef = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([]);
+
+  const totalPuntosRef   = useRef<Record<string, number>>({});
+  const playerColorsRef  = useRef<Record<string, string>>({});
+  const rankingRef       = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([]);
+  const dotsRef = useRef<BoardDot[]>([]);
+  useEffect(() => { dotsRef.current = dots; }, [dots]);
 
   const resetBoard = (full = false) => {
     setDots([]);
+    dotsRef.current = [];
     totalPuntosRef.current = {};
     rankingRef.current = [];
     if (full) {
@@ -55,21 +82,21 @@ export default function ShakeLivePage() {
     const emitJoin = () => {
       socket.emit('join-sala', {
         salaId: 'sala-001',
-        jugador: { id: 'mall-screen', nombre: 'Mall' }
+        jugador: { id: 'mall-screen', nombre: 'Mall' },
       });
     };
     if (socket.connected) emitJoin();
     else socket.on('connect', emitJoin);
 
-    socket.on("players-update", (jugadores: any[]) => {
+    socket.on('players-update', (jugadores: any[]) => {
       setScores(prev => {
         const next: Record<string, JugadorScore> = {};
         jugadores.forEach(j => {
           if (j.id === 'mall-screen') return;
-          playerColorsRef.current[j.id] = j.color || "#888";
+          playerColorsRef.current[j.id] = j.color || '#888';
           next[j.id] = {
-            nombre: j.nombre || "Jugador",
-            color: j.color || "#888",
+            nombre: j.nombre || 'Jugador',
+            color:  j.color  || '#888',
             puntos: prev[j.id]?.puntos ?? totalPuntosRef.current[j.id] ?? 0,
           };
         });
@@ -77,54 +104,69 @@ export default function ShakeLivePage() {
       });
     });
 
-    socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
-      totalPuntosRef.current[jugadorId] = (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza);
-      const color = playerColorsRef.current[jugadorId] ?? scores[jugadorId]?.color ?? "#888";
-      const { x, y } = randomPosition();
+    socket.on('score-update', ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
+      totalPuntosRef.current[jugadorId] =
+        (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza);
 
-      setDots(prev => [...prev, {
-        id: `${jugadorId}-${Date.now()}-${Math.random()}`,
-        color,
-        x,
-        y,
-      }]);
+      const color = playerColorsRef.current[jugadorId] ?? '#888';
+
+      
+      const pos = findFreePosition(dotsRef.current);
+
+      if (pos) {
+        const newDot: BoardDot = {
+          id:    `${jugadorId}-${Date.now()}-${Math.random()}`,
+          color,
+          x: pos.x,
+          y: pos.y,
+        };
+        setDots(prev => {
+          const next = [...prev, newDot];
+          dotsRef.current = next;
+          return next;
+        });
+      }
+      
 
       setScores(prev => {
         if (!prev[jugadorId]) return prev;
         return {
           ...prev,
-          [jugadorId]: { ...prev[jugadorId], puntos: totalPuntosRef.current[jugadorId] }
+          [jugadorId]: {
+            ...prev[jugadorId],
+            puntos: totalPuntosRef.current[jugadorId],
+          },
         };
       });
     });
 
-    socket.on("countdown", ({ count }: { count: number }) => setCountdown(count));
+    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count));
 
-    socket.on("game-start", () => {
+    socket.on('game-start', () => {
       resetBoard(false);
       setCountdown(null);
     });
 
-    socket.on("player-finished", () => {
-      setTimeout(() => navigate("/mall/results", { state: { ranking: rankingRef.current } }), 4000);
+    socket.on('player-finished', () => {
+      setTimeout(
+        () => navigate('/mall/results', { state: { ranking: rankingRef.current } }),
+        4000,
+      );
     });
 
-    socket.on("ranking-partida", (ranking: any[]) => {
-      if (ranking.length === 0) {
-        resetBoard(true);
-      } else {
-        rankingRef.current = ranking;
-      }
+    socket.on('ranking-partida', (ranking: any[]) => {
+      if (ranking.length === 0) resetBoard(true);
+      else rankingRef.current = ranking;
     });
 
     return () => {
       socket.off('connect', emitJoin);
-      socket.off("players-update");
-      socket.off("score-update");
-      socket.off("countdown");
-      socket.off("game-start");
-      socket.off("player-finished");
-      socket.off("ranking-partida");
+      socket.off('players-update');
+      socket.off('score-update');
+      socket.off('countdown');
+      socket.off('game-start');
+      socket.off('player-finished');
+      socket.off('ranking-partida');
     };
   }, [socket, navigate]);
 
@@ -151,6 +193,7 @@ export default function ShakeLivePage() {
       )}
 
       <div className="mall-shake__layout">
+        
         <aside>
           {ordenados.slice(1, 3).map(([id, j], i) => (
             <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
@@ -164,6 +207,7 @@ export default function ShakeLivePage() {
           ))}
         </aside>
 
+        
         <div style={{ flex: 1 }}>
           <div className="mall-board" aria-hidden>
             {dots.map((dot) => (
@@ -171,8 +215,8 @@ export default function ShakeLivePage() {
                 key={dot.id}
                 className="mall-board__dot mall-board__dot--filled"
                 style={{
-                  left: `${dot.x}%`,
-                  top: `${dot.y}%`,
+                  left:       `${dot.x}%`,
+                  top:        `${dot.y}%`,
                   background: dot.color,
                 }}
               />
@@ -185,7 +229,7 @@ export default function ShakeLivePage() {
                 <div key={id} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   background: 'rgba(255,255,255,0.05)', borderRadius: 8,
-                  padding: '6px 14px', border: `1px solid ${j.color}`
+                  padding: '6px 14px', border: `1px solid ${j.color}`,
                 }}>
                   <span>{getMedal(i)}</span>
                   <span style={{ color: j.color, fontWeight: 'bold', fontSize: '0.9rem' }}>{j.nombre}</span>
@@ -200,6 +244,7 @@ export default function ShakeLivePage() {
           </div>
         </div>
 
+        
         <aside>
           {ordenados[0] && (() => {
             const [id, j] = ordenados[0];
