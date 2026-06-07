@@ -1,12 +1,14 @@
 import { SupabaseClient } from "../../clients/SupabaseClient"
 import { ScorePayload, ApiResponse } from "../../types/types"
 
-
 const getTop3 = async (salaId: string): Promise<ApiResponse<any[]>> => {
+  const hace30min = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
   const { data, error } = await SupabaseClient
     .from("partidas")
     .select("jugador_id, puntos, juego, jugadores(nombre, color)")
     .eq("sala_id", salaId)
+    .gte("created_at", hace30min)
     .order("puntos", { ascending: false })
     .limit(20)
 
