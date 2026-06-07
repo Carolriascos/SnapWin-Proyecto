@@ -4,13 +4,11 @@ export const setupSocket = (io: Server) => {
   const salas: Map<string, any[]> = new Map();
   const salaGameMode: Map<string, "shake" | "dodge"> = new Map();
   const salaCountdownStarted: Map<string, boolean> = new Map();
+  // Puntajes EN MEMORIA de la partida actual — se limpian en nueva ronda
+  const salaPuntajes: Map<string, Record<string, number>> = new Map();
 
   io.on("connection", (socket) => {
-    console.log(` Cliente conectado: ${socket.id}`);
-
-    socket.on('admin-start-round', (salaId: string) => {
-      io.to(salaId).emit('round-started', { salaId })
-    })
+    console.log(`Cliente conectado: ${socket.id}`);
 
     socket.on("join-sala", (data: { salaId: string; jugador: any }) => {
       const { salaId, jugador } = data;
@@ -28,10 +26,8 @@ export const setupSocket = (io: Server) => {
       salas.set(salaId, jugadoresEnSala);
 
       io.to(salaId).emit("players-update", jugadoresEnSala);
-      console.log(`👤 ${jugador.nombre} se unió a sala ${salaId}`);
 
       const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen").length;
-
       if (humanos >= 2 && !salaCountdownStarted.get(salaId)) {
         salaCountdownStarted.set(salaId, true);
         startCountdown(io, salaId, salaGameMode);
@@ -39,6 +35,11 @@ export const setupSocket = (io: Server) => {
     });
 
     socket.on("shake-data", (data: { salaId: string; jugadorId: string; fuerza: number }) => {
+      // Acumular puntaje en memoria
+      const puntajes = salaPuntajes.get(data.salaId) ?? {};
+      puntajes[data.jugadorId] = (puntajes[data.jugadorId] ?? 0) + Math.round(data.fuerza);
+      salaPuntajes.set(data.salaId, puntajes);
+
       io.to(data.salaId).emit("score-update", {
         jugadorId: data.jugadorId,
         fuerza: data.fuerza,
@@ -58,25 +59,45 @@ export const setupSocket = (io: Server) => {
     socket.on("game-over", async (data: { salaId: string; jugadorId: string; puntos: number }) => {
       const jugadoresEnSala = salas.get(data.salaId) ?? [];
       const jugador = jugadoresEnSala.find((j) => j.id === data.jugadorId);
+
+      // Actualizar puntaje final en memoria
+      const puntajes = salaPuntajes.get(data.salaId) ?? {};
+      puntajes[data.jugadorId] = data.puntos;
+      salaPuntajes.set(data.salaId, puntajes);
+
       io.to(data.salaId).emit("player-finished", {
         jugadorId: data.jugadorId,
         puntos: data.puntos,
         nombre: jugador?.nombre ?? 'Jugador',
         color: jugador?.color ?? '#888',
       });
+
+      // Emitir ranking solo de esta partida
+      const rankingPartida = jugadoresEnSala
+        .filter(j => j.id !== 'mall-screen')
+        .map(j => ({
+          jugadorId: j.id,
+          nombre: j.nombre ?? 'Jugador',
+          color: j.color ?? '#888',
+          puntos: puntajes[j.id] ?? 0,
+        }))
+        .sort((a, b) => b.puntos - a.puntos);
+
+      io.to(data.salaId).emit("ranking-partida", rankingPartida);
     });
 
     socket.on("admin-start-round", (data: { salaId: string }) => {
-      console.log(`Admin inició ronda en sala ${data.salaId}`)
+      // Limpiar TODO de la partida anterior
       salas.set(data.salaId, []);
       salaCountdownStarted.delete(data.salaId);
       salaGameMode.delete(data.salaId);
+      salaPuntajes.set(data.salaId, {});
       io.to(data.salaId).emit('players-update', []);
-      startCountdown(io, data.salaId, salaGameMode)
+      io.to(data.salaId).emit('ranking-partida', []);
+      startCountdown(io, data.salaId, salaGameMode);
     });
 
     socket.on("disconnect", () => {
-      console.log(` Cliente desconectado: ${socket.id}`);
       salas.forEach((jugadores, salaId) => {
         const actualizados = jugadores.filter((j) => j.socketId !== socket.id);
         salas.set(salaId, actualizados);
