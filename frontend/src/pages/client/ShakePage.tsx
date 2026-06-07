@@ -17,33 +17,44 @@ export default function ShakePage() {
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
   const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
 
-  // Escuchar puntajes de todos para calcular puesto en tiempo real
   const allScoresRef = useRef<Record<string, number>>({})
+
+  const actualizarPuesto = () => {
+    const scores = allScoresRef.current
+    const miPuntos = scores[jugadorId] ?? 0
+    const ordenados = Object.entries(scores)
+      .filter(([id]) => id !== jugadorId)
+      .map(([, pts]) => pts)
+      .sort((a, b) => b - a)
+
+    const mayoresque = ordenados.filter(pts => pts > miPuntos).length
+    const pos = mayoresque + 1
+
+    if (pos === 1) {
+      setPuesto('🥇 Vas en 1er lugar')
+    } else if (pos === 2) {
+      setPuesto('🥈 Vas en 2do lugar')
+    } else if (pos === 3) {
+      setPuesto('🥉 Vas en 3er lugar')
+    } else {
+      
+      const tercerPuesto = ordenados[1] ?? 0
+      const faltaron = Math.max(0, tercerPuesto - miPuntos + 1)
+      setPuesto(`😅 No estás en el top 3 — te faltaron ${faltaron.toLocaleString()} pts para el 3er lugar`)
+    }
+  }
 
   const agregarPuntos = (fuerza: number) => {
     if (terminadoRef.current) return
-    puntosRef.current += Math.round(fuerza)
+    const sumado = Math.round(fuerza)
+    puntosRef.current += sumado
     setPuntos(puntosRef.current)
     allScoresRef.current[jugadorId] = puntosRef.current
     socket.emit('shake-data', { salaId, jugadorId, fuerza })
     actualizarPuesto()
   }
 
-  const actualizarPuesto = () => {
-    const scores = allScoresRef.current
-    const miPuntos = scores[jugadorId] ?? 0
-    const ordenados = Object.values(scores).sort((a, b) => b - a)
-    const pos = ordenados.indexOf(miPuntos) + 1
-    const total = ordenados.length
-
-    if (total === 0) { setPuesto(null); return }
-    if (pos === 1) setPuesto('🥇 Vas en 1er lugar')
-    else if (pos === 2) setPuesto('🥈 Vas en 2do lugar')
-    else if (pos === 3) setPuesto('🥉 Vas en 3er lugar')
-    else setPuesto('😅 No estás en el top 3')
-  }
-
-  // Sensor celular
+  
   useEffect(() => {
     const handler = (e: DeviceMotionEvent) => {
       const acc = e.acceleration
@@ -55,7 +66,7 @@ export default function ShakePage() {
     return () => window.removeEventListener('devicemotion', handler)
   }, [])
 
-  // Escuchar puntajes de otros jugadores
+  
   useEffect(() => {
     socket.on('score-update', ({ jugadorId: jId, fuerza }: { jugadorId: string; fuerza: number }) => {
       allScoresRef.current[jId] = (allScoresRef.current[jId] ?? 0) + Math.round(fuerza)
@@ -109,7 +120,7 @@ export default function ShakePage() {
           <p className="shake-score-card__label">Tu puntuación</p>
           <p className="shake-score-card__value">{puntos.toLocaleString()}</p>
           {puesto && (
-            <p style={{ fontSize: '1.1rem', fontWeight: 'bold', marginTop: '0.4rem', color: '#a855f7' }}>
+            <p style={{ fontSize: '0.95rem', fontWeight: 'bold', marginTop: '0.4rem', color: '#a855f7', textAlign: 'center', padding: '0 1rem' }}>
               {puesto}
             </p>
           )}
