@@ -5,7 +5,6 @@ import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
 import { getGameLabel, hasGameMode } from '../../utils/gameMode'
 
-/** Formulario de registro del jugador */
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState<RegisterPayload>({
@@ -27,41 +26,35 @@ export default function RegisterPage() {
       return
     }
     try {
-    const url = `${API_BASE}/auth/register`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, edad: Number(form.edad) })
-    })
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, edad: Number(form.edad) })
+      })
 
-    const text = await res.text()
-    let data: { success?: boolean; error?: string; data?: { jugadorId: string } } = {}
-    if (text) {
-      try {
-        data = JSON.parse(text)
-      } catch {
-        setError('El servidor respondió con un formato inválido. ¿Está corriendo el backend?')
-        return
+      const text = await res.text()
+      let data: { success?: boolean; error?: string; data?: { jugadorId: string; color: string } } = {}
+      if (text) {
+        try { data = JSON.parse(text) } catch {
+          setError('El servidor respondió con un formato inválido.')
+          return
+        }
       }
-    }
 
-    if (!res.ok) {
-      setError(data.error ?? `Error del servidor (${res.status})`)
-      return
-    }
+      if (!res.ok) { setError(data.error ?? `Error del servidor (${res.status})`); return }
 
-    if (data.success) {
-      localStorage.setItem('jugadorId', data.data!.jugadorId)
-      localStorage.setItem('salaId', form.salaId)
-      localStorage.setItem('nombre', form.nombre)
-      localStorage.setItem('correo', form.correo)
-      navigate('/prizes')
-    } else {
-      setError('Error: ' + (data.error ?? 'registro fallido'))
-    }
+      if (data.success && data.data) {
+        localStorage.setItem('jugadorId', data.data.jugadorId)
+        localStorage.setItem('color', data.data.color)  
+        localStorage.setItem('salaId', form.salaId)
+        localStorage.setItem('nombre', form.nombre)
+        localStorage.setItem('correo', form.correo)
+        navigate('/prizes')
+      } else {
+        setError('Error: ' + (data.error ?? 'registro fallido'))
+      }
     } catch (e: any) {
       setError('No se pudo conectar al servidor: ' + e.message)
-      console.error(e)
     }
   }
 
@@ -107,4 +100,4 @@ export default function RegisterPage() {
       </div>
     </div>
   )
-}
+} 
