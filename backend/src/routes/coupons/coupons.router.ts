@@ -8,3 +8,5 @@ CouponsRouter.post("/generate", CouponsController.generate);
 CouponsRouter.get("/validate/:codigo", AuthMiddleware, CouponsController.validate);
 
 CouponsRouter.patch("/redeem/:codigo", AuthMiddleware, CouponsController.redeem);
+
+CouponsRouter.get("/list", AuthMiddleware, CouponsController.list);

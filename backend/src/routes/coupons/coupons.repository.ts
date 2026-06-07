@@ -1,14 +1,14 @@
 import { SupabaseClient } from "../../clients/SupabaseClient";
 import { ApiResponse, Coupon } from "../../types/types";
 
-/* Descuentos según posición en el ranking */
+
 const PRIZES: Record<number, { nivel: "Oro" | "Plata" | "Bronce"; descuento: number }> = {
   1: { nivel: "Oro", descuento: 20 },
   2: { nivel: "Plata", descuento: 15 },
   3: { nivel: "Bronce", descuento: 10 },
 };
 
-/*Genera un código único  8 caracteres. */
+
 const generarCodigo = (): string => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   const parte1 = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
@@ -16,7 +16,7 @@ const generarCodigo = (): string => {
   return `FP-${parte1}-${parte2}`;
 };
 
-/*Crea un nuevo cupón para un jugador según su posición. */
+
 const generateCoupon = async (jugadorId: string, posicion: number): Promise<ApiResponse<Coupon>> => {
   const prize = PRIZES[posicion];
   if (!prize) {
@@ -75,7 +75,7 @@ const validateCoupon = async (
   return { success: true, data: { valido: true, coupon: data } };
 };
 
-/** Marca el cupón como canjeado. */
+
 const redeemCoupon = async (codigo: string): Promise<ApiResponse<any>> => {
   const { data, error } = await SupabaseClient.from("cupones")
     .update({ canjeado: true, canjeado_at: new Date().toISOString() })
@@ -91,4 +91,43 @@ const redeemCoupon = async (codigo: string): Promise<ApiResponse<any>> => {
   return { success: true, data };
 };
 
-export default { generateCoupon, validateCoupon, redeemCoupon };
+const listCoupons = async (): Promise<ApiResponse<any[]>> => {
+  const { data, error } = await SupabaseClient
+    .from("cupones")
+    .select("codigo, nivel, descuento, canjeado, canjeado_at, expires_at, jugador_id, jugadores(nombre)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error al listar cupones:", error);
+    return { success: false, error: error.message };
+  }
+
+  const now = new Date();
+  const cupones = (data ?? []).map((c: any) => {
+    let estado: "Canjeado" | "Pendiente" | "Expirado";
+    if (c.canjeado) {
+      estado = "Canjeado";
+    } else if (new Date(c.expires_at) < now) {
+      estado = "Expirado";
+    } else {
+      estado = "Pendiente";
+    }
+
+    const hora = c.canjeado_at
+      ? new Date(c.canjeado_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })
+      : new Date(c.expires_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+
+    return {
+      codigo: c.codigo,
+      jugador: c.jugadores?.nombre ?? "Desconocido",
+      hora,
+      nivel: c.nivel,
+      juego: "-",  
+      estado,
+    };
+  });
+
+  return { success: true, data: cupones };
+};
+
+export default { generateCoupon, validateCoupon, redeemCoupon, listCoupons };

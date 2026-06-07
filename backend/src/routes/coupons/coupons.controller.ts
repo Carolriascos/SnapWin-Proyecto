@@ -13,7 +13,7 @@ const generate = async (req: Request, res: Response) => {
   res.json(response);
 };
 
-/** Verifica si un código de cupón es válido */
+
 const validate = async (req: Request, res: Response) => {
   const { codigo } = req.params;
 
@@ -21,7 +21,7 @@ const validate = async (req: Request, res: Response) => {
   res.json(response);
 };
 
-/** Marca el cupón como canjeado en la base de datos. */
+
 const redeem = async (req: Request, res: Response) => {
   const { codigo } = req.params;
 
@@ -29,4 +29,9 @@ const redeem = async (req: Request, res: Response) => {
   res.json(response);
 };
 
-export const CouponsController = { generate, validate, redeem };
+const list = async (_req: Request, res: Response) => {
+  const response = await CouponsRepository.listCoupons();
+  res.json(response);
+};
+
+export const CouponsController = { generate, validate, redeem, list };
