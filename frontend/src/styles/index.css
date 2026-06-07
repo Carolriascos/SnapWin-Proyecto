@@ -1,7 +1,3 @@
-/*
-  estilos del frontend
-*/
-
 @import "./base/reset.css";
 @import "./base/variables.css";
 
@@ -30,3 +26,6 @@
 @import "./pages/mall/dodge-live.css";
 @import "./pages/mall/results.css";
 @import "./pages/mall/responsive.css";
+
+/* Admin — login y registro */
+@import "./pages/admin/index.css";

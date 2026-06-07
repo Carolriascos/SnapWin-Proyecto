@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import "../../styles/pages/admin/login.css";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "";
 
@@ -38,19 +39,81 @@ export default function LoginAdminPage() {
   };
 
   return (
-    <div>
-      <h1>Panel de administrador</h1>
-      <input placeholder="Usuario" value={usuario} onChange={(e) => setUsuario(e.target.value)} />
-      <br /><br />
-      <input placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} type="password"
-        onKeyDown={(e) => e.key === 'Enter' && login()} />
-      <br /><br />
-      <button onClick={login} disabled={cargando}>
-        {cargando ? "Entrando..." : "Entrar"}
-      </button>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <br /><br />
-      <button onClick={() => navigate("/admin/register")}>Crear cuenta de administrador</button>
+    <div className="login-page">
+      
+      <div className="login-bg" aria-hidden="true" />
+
+      
+      <div className="login-location">
+        <svg className="login-location__icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/>
+        </svg>
+        Chipichape Cali
+      </div>
+
+      
+      <header className="login-logo">
+        <div className="login-logo__wordmark">
+          <span className="login-logo__snap">snap</span>
+          <span className="login-logo__n"> n</span>
+          <svg className="login-logo__bolt" viewBox="0 0 18 22" fill="none">
+            <path d="M11 2L3 13h7l-1.5 9L17 11h-7L11 2z" fill="#ff8c1a"/>
+          </svg>
+          <span className="login-logo__win">win</span>
+        </div>
+        <p className="login-logo__tagline">
+          <span>live </span>
+          <span className="login-logo__exp">experience</span>
+        </p>
+      </header>
+
+      
+      <main className="login-card">
+        <h1 className="login-card__title">¡Bienvenido de nuevo!</h1>
+        <p className="login-card__subtitle">Inicie sesión para continuar.</p>
+
+        <div className="login-field">
+          <label className="login-field__label">Usuario</label>
+          <input
+            className="login-field__input"
+            type="text"
+            value={usuario}
+            onChange={(e) => setUsuario(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && login()}
+          />
+        </div>
+
+        <div className="login-field">
+          <label className="login-field__label">Contraseña</label>
+          <input
+            className="login-field__input"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && login()}
+          />
+        </div>
+
+        {error && <p className="login-error">{error}</p>}
+
+        <button
+          className="login-btn-primary"
+          onClick={login}
+          disabled={cargando}
+        >
+          {cargando ? "Entrando..." : "Iniciar sesión"}
+        </button>
+
+        <p className="login-footer">
+          ¿No tienes cuenta?{" "}
+          <button
+            className="login-link"
+            onClick={() => navigate("/admin/register")}
+          >
+            Crear cuenta
+          </button>
+        </p>
+      </main>
     </div>
   );
 }
