@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useSocket } from "../../hooks/useSocket";
 import MallHeader from "../../components/MallHeader";
 
@@ -12,35 +12,30 @@ interface JugadorResult {
 
 export default function ResultsMallPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const socket = useSocket();
-  const [resultados, setResultados] = useState<JugadorResult[]>([]);
+  const initialRanking = (location.state as { ranking?: JugadorResult[] } | null)?.ranking ?? [];
+  const [resultados, setResultados] = useState<JugadorResult[]>(initialRanking);
   const [animando, setAnimando] = useState(false);
 
   useEffect(() => {
-    socket.on("player-finished", (data: { jugadorId: string; puntos: number; nombre?: string; color?: string }) => {
-      setResultados(prev => {
-        const existe = prev.find(j => j.jugadorId === data.jugadorId);
-        if (existe) {
-          return prev.map(j => j.jugadorId === data.jugadorId ? { ...j, puntos: data.puntos } : j);
-        }
-        return [...prev, {
-          jugadorId: data.jugadorId,
-          nombre: data.nombre ?? 'Jugador',
-          puntos: data.puntos,
-          color: data.color,
-        }];
-      });
+    socket.emit('join-sala', {
+      salaId: 'sala-001',
+      jugador: { id: 'mall-screen', nombre: 'Mall' }
+    });
+
+    socket.on("ranking-partida", (ranking: JugadorResult[]) => {
+      if (ranking.length === 0) {
+        setResultados([]);
+        return;
+      }
+      setResultados(ranking);
       setAnimando(true);
       setTimeout(() => setAnimando(false), 600);
     });
 
-    socket.on("final-ranking", (ranking: JugadorResult[]) => {
-      setResultados(ranking);
-    });
-
     return () => {
-      socket.off("player-finished");
-      socket.off("final-ranking");
+      socket.off("ranking-partida");
     };
   }, [socket]);
 

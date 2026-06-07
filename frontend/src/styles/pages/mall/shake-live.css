@@ -75,35 +75,38 @@
 }
 
 .mall-board {
-  display: grid;
-  grid-template-columns: repeat(20, 1fr);
-  gap: 4px;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.04);
+  position: relative;
+  width: 100%;
+  min-height: clamp(220px, 38vw, 420px);
   border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+  background-color: #f0f0f0;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+  background-size: calc(100% / 8) calc(100% / 4);
   align-self: center;
 }
 
 .mall-board__dot {
-  width: 100%;
-  aspect-ratio: 1;
+  position: absolute;
+  width: clamp(14px, 2.2vw, 24px);
+  height: clamp(14px, 2.2vw, 24px);
   border-radius: 50%;
-  min-width: 6px;
-  max-width: 18px;
-  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  transform: translate(-50%, -50%);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
 
 .mall-board__dot--filled {
-  transform: scale(1.15);
-  box-shadow: 0 0 6px currentColor;
-  animation: dot-pop 0.2s ease;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  animation: dot-pop 0.25s ease;
 }
 
 @keyframes dot-pop {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.35); }
-  100% { transform: scale(1.15); }
+  0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0.5; }
+  60%  { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
 .mall-shake__hint-box {

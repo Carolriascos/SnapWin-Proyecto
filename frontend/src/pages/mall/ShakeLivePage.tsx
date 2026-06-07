@@ -9,17 +9,47 @@ interface JugadorScore {
   puntos: number;
 }
 
-// Posiciones aleatorias fijas para los dots — se generan una sola vez
-const TOTAL_DOTS = 180;
-const posicionesAleatorias = Array.from({ length: TOTAL_DOTS }, (_, i) => i)
-  .sort(() => Math.random() - 0.5);
+interface BoardDot {
+  id: string;
+  color: string;
+  x: number;
+  y: number;
+}
+
+function randomPosition(): { x: number; y: number } {
+  return {
+    x: 4 + Math.random() * 92,
+    y: 4 + Math.random() * 92,
+  };
+}
 
 export default function ShakeLivePage() {
   const socket   = useSocket();
   const navigate = useNavigate();
   const [scores, setScores] = useState<Record<string, JugadorScore>>({});
+  const [dots, setDots] = useState<BoardDot[]>([]);
   const [countdown, setCountdown] = useState<number | null>(null);
   const totalPuntosRef = useRef<Record<string, number>>({});
+  const playerColorsRef = useRef<Record<string, string>>({});
+  const rankingRef = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([]);
+
+  const resetBoard = (full = false) => {
+    setDots([]);
+    totalPuntosRef.current = {};
+    rankingRef.current = [];
+    if (full) {
+      setScores({});
+      playerColorsRef.current = {};
+    } else {
+      setScores(prev => {
+        const next: Record<string, JugadorScore> = {};
+        Object.entries(prev).forEach(([id, j]) => {
+          next[id] = { ...j, puntos: 0 };
+        });
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     const emitJoin = () => {
@@ -36,6 +66,7 @@ export default function ShakeLivePage() {
         const next: Record<string, JugadorScore> = {};
         jugadores.forEach(j => {
           if (j.id === 'mall-screen') return;
+          playerColorsRef.current[j.id] = j.color || "#888";
           next[j.id] = {
             nombre: j.nombre || "Jugador",
             color: j.color || "#888",
@@ -48,6 +79,16 @@ export default function ShakeLivePage() {
 
     socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
       totalPuntosRef.current[jugadorId] = (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza);
+      const color = playerColorsRef.current[jugadorId] ?? scores[jugadorId]?.color ?? "#888";
+      const { x, y } = randomPosition();
+
+      setDots(prev => [...prev, {
+        id: `${jugadorId}-${Date.now()}-${Math.random()}`,
+        color,
+        x,
+        y,
+      }]);
+
       setScores(prev => {
         if (!prev[jugadorId]) return prev;
         return {
@@ -58,13 +99,21 @@ export default function ShakeLivePage() {
     });
 
     socket.on("countdown", ({ count }: { count: number }) => setCountdown(count));
-    socket.on("player-finished", () => setTimeout(() => navigate("/mall/results"), 4000));
 
-    // Limpiar al iniciar nueva ronda
+    socket.on("game-start", () => {
+      resetBoard(false);
+      setCountdown(null);
+    });
+
+    socket.on("player-finished", () => {
+      setTimeout(() => navigate("/mall/results", { state: { ranking: rankingRef.current } }), 4000);
+    });
+
     socket.on("ranking-partida", (ranking: any[]) => {
       if (ranking.length === 0) {
-        setScores({});
-        totalPuntosRef.current = {};
+        resetBoard(true);
+      } else {
+        rankingRef.current = ranking;
       }
     });
 
@@ -73,6 +122,7 @@ export default function ShakeLivePage() {
       socket.off("players-update");
       socket.off("score-update");
       socket.off("countdown");
+      socket.off("game-start");
       socket.off("player-finished");
       socket.off("ranking-partida");
     };
@@ -81,20 +131,6 @@ export default function ShakeLivePage() {
   const ordenados = Object.entries(scores)
     .filter(([id]) => id !== 'mall-screen')
     .sort(([, a], [, b]) => b.puntos - a.puntos);
-
-  const totalPuntos = ordenados.reduce((s, [, j]) => s + j.puntos, 0);
-
-  // Construir dots con posiciones aleatorias — vacío al inicio
-  const dots: string[] = Array(TOTAL_DOTS).fill('empty');
-  if (totalPuntos > 0) {
-    let posIdx = 0;
-    ordenados.forEach(([, j]) => {
-      const count = Math.round((j.puntos / totalPuntos) * TOTAL_DOTS);
-      for (let i = 0; i < count && posIdx < TOTAL_DOTS; i++, posIdx++) {
-        dots[posicionesAleatorias[posIdx]] = j.color;
-      }
-    });
-  }
 
   const getMedal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? '';
 
@@ -130,13 +166,14 @@ export default function ShakeLivePage() {
 
         <div style={{ flex: 1 }}>
           <div className="mall-board" aria-hidden>
-            {dots.map((color, i) => (
+            {dots.map((dot) => (
               <span
-                key={i}
-                className={`mall-board__dot${color !== 'empty' ? ' mall-board__dot--filled' : ''}`}
+                key={dot.id}
+                className="mall-board__dot mall-board__dot--filled"
                 style={{
-                  background: color === 'empty' ? 'transparent' : color,
-                  border: color === 'empty' ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                  left: `${dot.x}%`,
+                  top: `${dot.y}%`,
+                  background: dot.color,
                 }}
               />
             ))}
