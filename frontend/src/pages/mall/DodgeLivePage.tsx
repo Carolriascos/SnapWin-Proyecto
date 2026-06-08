@@ -161,7 +161,6 @@ export default function DodgeLivePage() {
             const next = { ...jugPrev }
             Object.entries(next).forEach(([id, j]) => {
               if (!j.vivo) return
-
               const hit = prev.some(o => colisionados.has(o.id) && o.lane === j.carril)
               if (hit && j.vidas > 0) {
                 const nuevasVidas = j.vidas - 1
@@ -184,7 +183,9 @@ export default function DodgeLivePage() {
           })
         }
 
+
         return prev
+          .filter(o => !colisionados.has(o.id))  
           .map(o => ({ ...o, y: o.y + SPEED_PCT }))
           .filter(o => o.y < 105)
       })
