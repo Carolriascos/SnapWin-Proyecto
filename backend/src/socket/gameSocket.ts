@@ -7,6 +7,8 @@ export const setupSocket = (io: Server) => {
   const salaCountdownStarted: Map<string, boolean> = new Map();
   const salaPuntajes: Map<string, Record<string, number>> = new Map();
   const salaTerminados: Map<string, Set<string>> = new Map();
+  // Para "iniciar ronda" admin: arranca inmediatamente si ya hay >=2 jugadores
+  const salaAdminStarted: Map<string, boolean> = new Map();
 
   const emitirStatsDia = async () => {
     try {
@@ -26,9 +28,9 @@ export const setupSocket = (io: Server) => {
       socket.join(salaId);
 
       const jugadoresEnSala = salas.get(salaId) ?? [];
-      const humanosAntes = jugadoresEnSala.filter((j) => j.id !== "mall-screen").length;
+      const humanosAntes = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
 
-      if (jugador?.id !== "mall-screen" && humanosAntes === 0) {
+      if (jugador?.id !== "mall-screen" && jugador?.id !== "admin-panel" && humanosAntes === 0) {
         salaGameMode.set(salaId, modo);
       }
 
@@ -37,8 +39,10 @@ export const setupSocket = (io: Server) => {
 
       io.to(salaId).emit("players-update", jugadoresEnSala);
 
-      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen").length;
-      if (humanos >= 2 && !salaCountdownStarted.get(salaId)) {
+      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
+
+      // Arranca countdown automático con >=2 jugadores (solo si admin no lo inició ya)
+      if (humanos >= 2 && !salaCountdownStarted.get(salaId) && !salaAdminStarted.get(salaId)) {
         salaCountdownStarted.set(salaId, true);
         startCountdown(io, salaId, salaGameMode);
       }
@@ -85,7 +89,7 @@ export const setupSocket = (io: Server) => {
       });
 
       const rankingParcial = jugadoresEnSala
-        .filter((j) => j.id !== "mall-screen")
+        .filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel")
         .map((j) => ({
           jugadorId: j.id,
           nombre: j.nombre ?? "Jugador",
@@ -94,7 +98,7 @@ export const setupSocket = (io: Server) => {
         }))
         .sort((a, b) => b.puntos - a.puntos);
 
-      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen");
+      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
       const todosTerminaron = humanos.length > 0 && humanos.every((j) => terminados.has(j.id));
 
       if (todosTerminaron) {
@@ -106,15 +110,29 @@ export const setupSocket = (io: Server) => {
       }
     });
 
+    // Admin inicia ronda: arranca INMEDIATAMENTE si hay >=2 jugadores, sino espera
     socket.on("admin-start-round", (data: { salaId: string }) => {
-      salas.set(data.salaId, []);
-      salaCountdownStarted.delete(data.salaId);
-      salaGameMode.delete(data.salaId);
-      salaPuntajes.set(data.salaId, {});
-      salaTerminados.set(data.salaId, new Set());
-      io.to(data.salaId).emit("players-update", []);
-      io.to(data.salaId).emit("ranking-partida", []);
-      startCountdown(io, data.salaId, salaGameMode);
+      const salaId = data.salaId;
+      const jugadoresEnSala = salas.get(salaId) ?? [];
+      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
+
+      // Resetear estado de la ronda
+      salaCountdownStarted.delete(salaId);
+      salaAdminStarted.set(salaId, true);
+      salaPuntajes.set(salaId, {});
+      salaTerminados.set(salaId, new Set());
+      io.to(salaId).emit("ranking-partida", []);
+
+      if (humanos.length >= 2) {
+        // Arranca inmediatamente sin countdown
+        const game = salaGameMode.get(salaId) ?? "shake";
+        io.to(salaId).emit("game-start", { salaId, game, timestamp: Date.now() });
+        console.log(`Admin arrancó ronda inmediata en ${salaId} con ${humanos.length} jugadores`);
+      } else {
+        // Espera a que lleguen 2 jugadores, luego arranca inmediato
+        console.log(`Admin configuró inicio inmediato en ${salaId}, esperando jugadores...`);
+        // Cuando llegue el jugador #2, el join-sala detectará salaAdminStarted=true y arrancará
+      }
     });
 
     socket.on("pedir-stats", async () => {
@@ -126,7 +144,6 @@ export const setupSocket = (io: Server) => {
       }
     });
 
-    // ← NUEVO: jugador canjea cupón desde ResultPage
     socket.on("cupon-canjeado", async (data: { salaId: string; codigo: string }) => {
       io.to(data.salaId).emit("cupon-actualizado", { codigo: data.codigo });
       try {
@@ -141,10 +158,11 @@ export const setupSocket = (io: Server) => {
       salas.forEach((jugadores, salaId) => {
         const actualizados = jugadores.filter((j) => j.socketId !== socket.id);
         salas.set(salaId, actualizados);
-        const humanosActuales = actualizados.filter((j) => j.id !== "mall-screen").length;
+        const humanosActuales = actualizados.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
         if (humanosActuales === 0) {
           salaGameMode.delete(salaId);
           salaCountdownStarted.delete(salaId);
+          salaAdminStarted.delete(salaId);
           salaTerminados.set(salaId, new Set());
         }
         io.to(salaId).emit("players-update", actualizados);

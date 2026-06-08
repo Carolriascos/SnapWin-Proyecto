@@ -44,10 +44,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     cargarStats();
-    const iv = setInterval(cargarStats, 30_000);
+    const iv = setInterval(cargarStats, 15_000); // cada 15s
     return () => clearInterval(iv);
   }, [cargarStats]);
-
 
   useEffect(() => {
     const emitJoin = () => {
@@ -57,7 +56,6 @@ export default function DashboardPage() {
     if (socket.connected) emitJoin();
     else socket.on("connect", emitJoin);
 
-
     socket.on("stats-dia", (data: StatsDia) => {
       setStats(data);
       setUltimaAct(new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
@@ -65,20 +63,28 @@ export default function DashboardPage() {
 
     socket.on("player-finished", () => {
       setTimeout(cargarStats, 1000);
+      setRondaActiva(false);
     });
 
-    socket.on("player-finished", () => setRondaActiva(false));
+    socket.on("partida-finalizada", () => {
+      setRondaActiva(false);
+      setTimeout(cargarStats, 1000);
+    });
 
     return () => {
       socket.off("connect", emitJoin);
       socket.off("stats-dia");
       socket.off("player-finished");
+      socket.off("partida-finalizada");
     };
   }, [socket, cargarStats]);
 
   const iniciarRonda = () => {
+    // Arranca inmediatamente si hay jugadores, sino espera
     socket.emit("admin-start-round", { salaId: SALA_ID });
     setRondaActiva(true);
+    // Si nadie termina en 5 min, resetea el botón
+    setTimeout(() => setRondaActiva(false), 5 * 60 * 1000);
   };
 
   const s = stats;
@@ -110,7 +116,6 @@ export default function DashboardPage() {
       </header>
 
       <main className="dash-main">
-
         <div className="dash-section-title">
           <span>Estadísticas del día</span>
           <span className="dash-section-title__sep"> — </span>
@@ -125,28 +130,19 @@ export default function DashboardPage() {
         <div className="dash-metrics">
           <div className="dash-card dash-card--jugadores">
             <p className="dash-card__label">JUGADORES</p>
-            <p className="dash-card__value dash-card__value--lime">
-              {s?.jugadores ?? 0}
-            </p>
+            <p className="dash-card__value dash-card__value--lime">{s?.jugadores ?? 0}</p>
             <p className="dash-card__sublabel">TOTAL HOY</p>
           </div>
-
           <div className="dash-card">
             <p className="dash-card__label">Puntaje máx.</p>
-            <p className="dash-card__value dash-card__value--purple">
-              {(s?.puntajeMax.valor ?? 0).toLocaleString()}
-            </p>
+            <p className="dash-card__value dash-card__value--purple">{(s?.puntajeMax.valor ?? 0).toLocaleString()}</p>
             <p className="dash-card__sublabel">{s?.puntajeMax.nombre ?? "—"}</p>
           </div>
-
           <div className="dash-card">
             <p className="dash-card__label">Cupones gen.</p>
-            <p className="dash-card__value dash-card__value--orange">
-              {s?.cuponesGen.valor ?? 0}
-            </p>
+            <p className="dash-card__value dash-card__value--orange">{s?.cuponesGen.valor ?? 0}</p>
             <p className="dash-card__sublabel">{s?.cuponesGen.porcentajeCanje ?? 0}% canjeados</p>
           </div>
-
           <div className="dash-card">
             <p className="dash-card__label">Partidas hoy</p>
             <p className="dash-card__value">{s?.partidas ?? 0}</p>
@@ -154,16 +150,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
-
         <div className="dash-mid-row">
           <div className="dash-card dash-card--games">
             <h3 className="dash-card__title">Juegos más jugados</h3>
             <div className="dash-games-list">
-              {(s?.juegosMasJugados ?? [{ nombre: "Shake Battle", porcentaje: 0, color: "#a4ff00" }, { nombre: "Dodge Game", porcentaje: 0, color: "#c41e5a" }]).map((juego) => (
+              {(s?.juegosMasJugados ?? [
+                { nombre: "Shake Battle", porcentaje: 0, color: "#a4ff00" },
+                { nombre: "Dodge Game",   porcentaje: 0, color: "#c41e5a" },
+              ]).map((juego) => (
                 <div key={juego.nombre} className="dash-game-item">
-                  <span className="dash-game-item__name" style={{ color: juego.color }}>
-                    {juego.nombre}
-                  </span>
+                  <span className="dash-game-item__name" style={{ color: juego.color }}>{juego.nombre}</span>
                   <div className="dash-game-item__bar-track">
                     <div
                       className="dash-game-item__bar-fill"
@@ -182,6 +178,7 @@ export default function DashboardPage() {
                 className={`dash-btn-round ${rondaActiva ? "dash-btn-round--active" : ""}`}
                 onClick={iniciarRonda}
                 disabled={rondaActiva}
+                title="Si hay >=2 jugadores arranca inmediato. Si no, espera que lleguen."
               >
                 {rondaActiva ? "Ronda en curso…" : "Iniciar ronda"}
               </button>
@@ -191,23 +188,15 @@ export default function DashboardPage() {
             </div>
           </div>
 
-
           <div className="dash-card dash-card--top">
             <h3 className="dash-card__title">Top jugadores</h3>
             <div className="dash-top-list">
               {(s?.topJugadores ?? []).length === 0 ? (
-                <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.85rem" }}>
-                  Sin partidas aún hoy
-                </p>
+                <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.85rem" }}>Sin partidas aún hoy</p>
               ) : (
                 s!.topJugadores.map((j, i) => (
                   <div key={i} className="dash-top-item">
-                    <span
-                      className="dash-top-item__name"
-                      style={{ color: j.color ?? "inherit" }}
-                    >
-                      {j.nombre}
-                    </span>
+                    <span className="dash-top-item__name" style={{ color: j.color ?? "inherit" }}>{j.nombre}</span>
                     <span className="dash-top-item__score">{j.puntos.toLocaleString()}</span>
                   </div>
                 ))
@@ -216,45 +205,35 @@ export default function DashboardPage() {
           </div>
         </div>
 
-
         <div className="dash-card dash-card--coupons">
           <span className="dash-coupons__label">Cupones por nivel</span>
-
           <div className="dash-coupon-level">
             <p className="dash-coupon-level__name dash-coupon-level__name--oro">Oro</p>
-            <p className="dash-coupon-level__value dash-coupon-level__value--oro">
-              {s?.cuponesPorNivel.oro ?? 0}
-            </p>
+            <p className="dash-coupon-level__value dash-coupon-level__value--oro">{s?.cuponesPorNivel.oro ?? 0}</p>
             <p className="dash-coupon-level__personas">Personas</p>
           </div>
-
           <div className="dash-coupon-level">
             <p className="dash-coupon-level__name">Plata</p>
             <p className="dash-coupon-level__value">{s?.cuponesPorNivel.plata ?? 0}</p>
             <p className="dash-coupon-level__personas">Personas</p>
           </div>
-
           <div className="dash-coupon-level">
             <p className="dash-coupon-level__name dash-coupon-level__name--bronce">Bronce</p>
-            <p className="dash-coupon-level__value dash-coupon-level__value--bronce">
-              {s?.cuponesPorNivel.bronce ?? 0}
-            </p>
+            <p className="dash-coupon-level__value dash-coupon-level__value--bronce">{s?.cuponesPorNivel.bronce ?? 0}</p>
             <p className="dash-coupon-level__personas">Personas</p>
           </div>
-
           <div className="dash-coupon-tasa">
             <p className="dash-coupon-tasa__label">Tasa canje</p>
             <p className="dash-coupon-tasa__value">{s?.cuponesPorNivel.tasaCanje ?? 0}%</p>
           </div>
         </div>
 
-
         <div className="dash-card" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", textAlign: "center" }}>
           {[
-            { label: "Total generados", valor: s?.cuponesList.total ?? 0, color: "#7c3aed" },
-            { label: "Canjeados",       valor: s?.cuponesList.canjeados ?? 0,  color: "#a4ff00" },
+            { label: "Total generados", valor: s?.cuponesList.total     ?? 0, color: "#7c3aed" },
+            { label: "Canjeados",       valor: s?.cuponesList.canjeados  ?? 0, color: "#a4ff00" },
             { label: "Pendientes",      valor: s?.cuponesList.pendientes ?? 0, color: "#ff8c1a" },
-            { label: "Expirados",       valor: s?.cuponesList.expirados ?? 0,  color: "#666" },
+            { label: "Expirados",       valor: s?.cuponesList.expirados  ?? 0, color: "#666"    },
           ].map(({ label, valor, color }) => (
             <div key={label}>
               <p style={{ fontSize: "1.8rem", fontWeight: 900, color }}>{valor}</p>

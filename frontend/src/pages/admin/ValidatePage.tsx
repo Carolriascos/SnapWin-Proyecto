@@ -32,8 +32,8 @@ export default function ValidatePage() {
   const navigate = useNavigate();
   const socket   = useSocket();
 
-  const [cupones,      setCupones]      = useState<Cupon[]>([]);
-  const [stats,        setStats]        = useState<Stats>({ totalGenerados: 0, canjeados: 0, pendientes: 0, expirados: 0 });
+  const [cupones,       setCupones]       = useState<Cupon[]>([]);
+  const [stats,         setStats]         = useState<Stats>({ totalGenerados: 0, canjeados: 0, pendientes: 0, expirados: 0 });
   const [cargandoLista, setCargandoLista] = useState(true);
 
   const [codigo,    setCodigo]    = useState("");
@@ -47,10 +47,12 @@ export default function ValidatePage() {
     if (!localStorage.getItem("adminLoggedIn")) navigate("/admin");
   }, [navigate]);
 
-  
   const cargarCupones = useCallback(async () => {
     try {
-      const res  = await fetch(`${BACKEND}/coupons/list`);
+      const token = localStorage.getItem("adminToken") ?? "";
+      const res  = await fetch(`${BACKEND}/coupons/list`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
 
       if (data.success && Array.isArray(data.data)) {
@@ -70,24 +72,25 @@ export default function ValidatePage() {
     }
   }, []);
 
-  
   useEffect(() => {
     cargarCupones();
-    const intervalo = setInterval(cargarCupones, 15_000); // fallback cada 15s
+    const intervalo = setInterval(cargarCupones, 10_000); // actualiza cada 10s
     return () => clearInterval(intervalo);
   }, [cargarCupones]);
 
+  // Actualización en tiempo real por socket
   useEffect(() => {
-    const actualizar = () => { setTimeout(cargarCupones, 800); };
+    const actualizar = () => setTimeout(cargarCupones, 500);
     socket.on("partida-finalizada", actualizar);
-    socket.on("player-finished", actualizar);
+    socket.on("player-finished",    actualizar);
+    socket.on("cupon-actualizado",  actualizar);
     return () => {
       socket.off("partida-finalizada", actualizar);
-      socket.off("player-finished", actualizar);
+      socket.off("player-finished",    actualizar);
+      socket.off("cupon-actualizado",  actualizar);
     };
   }, [socket, cargarCupones]);
 
-  
   const resetear = () => {
     setCodigo("");
     setResultado(null);
@@ -95,16 +98,18 @@ export default function ValidatePage() {
     setModalOpen(false);
   };
 
-  
   const validar = async () => {
     if (!codigo.trim()) return;
     setCargando(true);
     setResultado("Verificando...");
     setInfoCupon(null);
     const upper = codigo.trim().toUpperCase();
+    const token = localStorage.getItem("adminToken") ?? "";
 
     try {
-      const res  = await fetch(`${BACKEND}/coupons/validate/${upper}`);
+      const res  = await fetch(`${BACKEND}/coupons/validate/${upper}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
 
       if (!data.success) {
@@ -121,11 +126,14 @@ export default function ValidatePage() {
         return;
       }
 
-      const redeem = await fetch(`${BACKEND}/coupons/redeem/${upper}`, { method: "PATCH" });
-      const rd     = await redeem.json();
+      const redeem = await fetch(`${BACKEND}/coupons/redeem/${upper}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const rd = await redeem.json();
 
       if (rd.success) {
-        setResultado("CANJEADO EXITOSAMENTE");
+        setResultado("CANJEADO EXITOSAMENTE ✅");
         setColorRes("green");
         setInfoCupon({
           nivel:      coupon.nivel,
@@ -134,8 +142,7 @@ export default function ValidatePage() {
           expires_at: coupon.expires_at,
         });
         setCodigo("");
-
-
+        socket.emit("cupon-canjeado", { salaId: "sala-001", codigo: upper });
         await cargarCupones();
       } else {
         setResultado(`Error al canjear: ${rd.error}`);
@@ -149,27 +156,13 @@ export default function ValidatePage() {
     }
   };
 
-  
-  const nivelClass = (nivel: string) => {
-    if (nivel === "Oro")    return "val-nivel--oro";
-    if (nivel === "Bronce") return "val-nivel--bronce";
-    return "";
-  };
+  const nivelClass  = (n: string) => n === "Oro" ? "val-nivel--oro" : n === "Bronce" ? "val-nivel--bronce" : "";
+  const estadoClass = (e: string) => e === "Canjeado" ? "val-estado--canjeado" : e === "Pendiente" ? "val-estado--pendiente" : "val-estado--expirado";
 
-  const estadoClass = (estado: string) => {
-    if (estado === "Canjeado")  return "val-estado--canjeado";
-    if (estado === "Pendiente") return "val-estado--pendiente";
-    if (estado === "Expirado")  return "val-estado--expirado";
-    return "";
-  };
-
-  
   return (
     <div className="val-page">
-      
       <div className="val-bg" aria-hidden="true" />
 
-      
       <div className="val-location">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/>
@@ -177,7 +170,6 @@ export default function ValidatePage() {
         Chipichape Cali
       </div>
 
-      
       <header className="val-logo">
         <div className="val-logo__wordmark">
           <span className="val-logo__snap">snap</span>
@@ -193,10 +185,7 @@ export default function ValidatePage() {
         </p>
       </header>
 
-      
       <main className="val-main">
-
-        
         <div className="val-top-row">
           <h1 className="val-title">Cupones</h1>
           <div className="val-top-actions">
@@ -209,46 +198,31 @@ export default function ValidatePage() {
           </div>
         </div>
 
-
         <div className="val-summary">
-          <div className="val-summary-card">
-            <p className="val-summary-card__value">{stats.totalGenerados}</p>
-            <p className="val-summary-card__label">Total generados</p>
-          </div>
-          <div className="val-summary-card">
-            <p className="val-summary-card__value">{stats.canjeados}</p>
-            <p className="val-summary-card__label">Canjeados</p>
-          </div>
-          <div className="val-summary-card">
-            <p className="val-summary-card__value">{stats.pendientes}</p>
-            <p className="val-summary-card__label">Pendientes</p>
-          </div>
-          <div className="val-summary-card">
-            <p className="val-summary-card__value">{stats.expirados}</p>
-            <p className="val-summary-card__label">Expirados</p>
-          </div>
+          {[
+            { label: "Total generados", val: stats.totalGenerados },
+            { label: "Canjeados",       val: stats.canjeados },
+            { label: "Pendientes",      val: stats.pendientes },
+            { label: "Expirados",       val: stats.expirados },
+          ].map(({ label, val }) => (
+            <div key={label} className="val-summary-card">
+              <p className="val-summary-card__value">{val}</p>
+              <p className="val-summary-card__label">{label}</p>
+            </div>
+          ))}
         </div>
 
-        
         <div className="val-table-wrap">
           {cargandoLista ? (
-            <p style={{ color: "#888", textAlign: "center", padding: "2rem" }}>
-              Cargando cupones…
-            </p>
+            <p style={{ color: "#888", textAlign: "center", padding: "2rem" }}>Cargando cupones…</p>
           ) : cupones.length === 0 ? (
-            <p style={{ color: "#888", textAlign: "center", padding: "2rem" }}>
-              No hay cupones registrados aún.
-            </p>
+            <p style={{ color: "#888", textAlign: "center", padding: "2rem" }}>No hay cupones registrados aún.</p>
           ) : (
             <table className="val-table">
               <thead>
                 <tr>
-                  <th>Código</th>
-                  <th>Jugador</th>
-                  <th>Hora</th>
-                  <th>Nivel</th>
-                  <th>Juego</th>
-                  <th>Estado</th>
+                  <th>Código</th><th>Jugador</th><th>Hora</th>
+                  <th>Nivel</th><th>Juego</th><th>Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -268,25 +242,21 @@ export default function ValidatePage() {
         </div>
       </main>
 
-
       {modalOpen && (
         <div className="val-modal-overlay" onClick={() => !cargando && resetear()}>
           <div className="val-modal" onClick={(e) => e.stopPropagation()}>
             <button className="val-modal__close" onClick={resetear} disabled={cargando}>✕</button>
-
             <h2 className="val-modal__title">Validar Cupón</h2>
             <p className="val-modal__subtitle">Ingresa el código que muestra el cliente</p>
-
             <input
               className="val-modal__input"
-              placeholder="Ej: SNW-0847"
+              placeholder="Ej: FP-ABCD-XY"
               value={codigo}
               onChange={(e) => setCodigo(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && validar()}
               disabled={cargando}
               autoFocus
             />
-
             <button
               className="val-modal__btn"
               onClick={validar}
@@ -295,7 +265,6 @@ export default function ValidatePage() {
               {cargando ? "Verificando…" : "Verificar y canjear"}
             </button>
 
-           
             {resultado && resultado !== "Verificando..." && (
               <div className={`val-modal__result val-modal__result--${colorRes}`}>
                 <p className="val-modal__result-title">{resultado}</p>
