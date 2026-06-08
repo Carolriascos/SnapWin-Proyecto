@@ -126,6 +126,17 @@ export const setupSocket = (io: Server) => {
       }
     });
 
+    // ← NUEVO: jugador canjea cupón desde ResultPage
+    socket.on("cupon-canjeado", async (data: { salaId: string; codigo: string }) => {
+      io.to(data.salaId).emit("cupon-actualizado", { codigo: data.codigo });
+      try {
+        const res = await ScoresRepository.getStatsDia();
+        if (res.success) io.to(data.salaId).emit("stats-dia", res.data);
+      } catch (e) {
+        console.error("Error emitiendo stats tras canje:", e);
+      }
+    });
+
     socket.on("disconnect", () => {
       salas.forEach((jugadores, salaId) => {
         const actualizados = jugadores.filter((j) => j.socketId !== socket.id);

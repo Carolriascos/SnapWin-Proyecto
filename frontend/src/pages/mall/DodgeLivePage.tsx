@@ -7,31 +7,27 @@ import '../../styles/pages/mall/dodge-live.css'
 interface JugadorDodge {
   nombre: string
   color: string
-  carril: number        
-  vidas: number         
+  carril: number
+  vidas: number
   puntos: number
-  vivo: boolean
+  eliminado: boolean   // true SOLO cuando vidas llega a 0
 }
 
 interface Obstaculo {
   id: number
-  lane: number          
-  y: number           
+  lane: number
+  y: number
 }
 
-
-const LANES          = 4
-const VIDAS_INICIAL  = 3
-const SPAWN_MS       = 1400   
-const TICK_MS        = 40     
-const SPEED_PCT      = 2.8    
-const HIT_THRESHOLD  = 14     
-
+const LANES         = 4
+const VIDAS_INICIAL = 3
+const SPAWN_MS      = 1400
+const TICK_MS       = 40
+const SPEED_PCT     = 2.8
 
 function laneX(lane: number) {
   return ((lane + 0.5) / LANES) * 100
 }
-
 
 export default function DodgeLivePage() {
   const socket   = useSocket()
@@ -46,9 +42,7 @@ export default function DodgeLivePage() {
   const idRef        = useRef(0)
   const rankingRef   = useRef<{ jugadorId: string; nombre: string; puntos: number; color: string }[]>([])
 
-
   useEffect(() => { jugadoresRef.current = jugadores }, [jugadores])
-
 
   useEffect(() => {
     const emitJoin = () => {
@@ -67,12 +61,12 @@ export default function DodgeLivePage() {
           if (j.id === 'mall-screen') return
           if (!next[j.id]) {
             next[j.id] = {
-              nombre: j.nombre || 'Jugador',
-              color:  j.color  || '#7c3aed',
-              carril: 1,
-              vidas:  VIDAS_INICIAL,
-              puntos: 0,
-              vivo:   true,
+              nombre:    j.nombre || 'Jugador',
+              color:     j.color  || '#7c3aed',
+              carril:    1,
+              vidas:     VIDAS_INICIAL,
+              puntos:    0,
+              eliminado: false,   // ← nunca más "vivo"
             }
           }
         })
@@ -90,9 +84,7 @@ export default function DodgeLivePage() {
       })
     })
 
-    socket.on('countdown', ({ count }: { count: number }) => {
-      setCountdown(count)
-    })
+    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
 
     socket.on('game-start', () => {
       setCountdown(null)
@@ -101,7 +93,7 @@ export default function DodgeLivePage() {
       setJugadores(prev => {
         const next = { ...prev }
         Object.keys(next).forEach(id => {
-          next[id] = { ...next[id], vidas: VIDAS_INICIAL, puntos: 0, vivo: true }
+          next[id] = { ...next[id], vidas: VIDAS_INICIAL, puntos: 0, eliminado: false }
         })
         return next
       })
@@ -110,7 +102,7 @@ export default function DodgeLivePage() {
     socket.on('player-finished', () => {
       setGameOver(true)
       setTimeout(() => {
-        navigate('/mall/results', { state: { ranking: rankingRef.current } })
+        navigate('/mall/results', { state: { ranking: rankingRef.current, game: 'dodge' } })
       }, 4500)
     })
 
@@ -129,7 +121,6 @@ export default function DodgeLivePage() {
     }
   }, [socket, navigate])
 
-
   useEffect(() => {
     const spawnId = setInterval(() => {
       if (gameOver) return
@@ -143,49 +134,47 @@ export default function DodgeLivePage() {
       if (gameOver) return
       setObstaculos(prev => {
         const jug = jugadoresRef.current
-        const vivos = Object.values(jug).filter(j => j.vivo)
 
-
+        // colisiones solo con jugadores NO eliminados
         const colisionados = new Set<number>()
         prev.forEach(o => {
           if (o.y > 72 && o.y < 88) {
-            vivos.forEach(j => {
-              if (j.carril === o.lane) colisionados.add(o.id)
+            Object.values(jug).forEach(j => {
+              if (!j.eliminado && j.carril === o.lane) colisionados.add(o.id)
             })
           }
         })
-
 
         if (colisionados.size > 0) {
           setJugadores(jugPrev => {
             const next = { ...jugPrev }
             Object.entries(next).forEach(([id, j]) => {
-              if (!j.vivo) return
+              if (j.eliminado) return   // ya eliminado, ignorar
               const hit = prev.some(o => colisionados.has(o.id) && o.lane === j.carril)
               if (hit && j.vidas > 0) {
                 const nuevasVidas = j.vidas - 1
-                next[id] = { ...j, vidas: nuevasVidas, vivo: nuevasVidas > 0 }
+                // eliminado SOLO cuando vidas llega a 0
+                next[id] = { ...j, vidas: nuevasVidas, eliminado: nuevasVidas === 0 }
               }
             })
             return next
           })
         }
 
-
         const esquivados = prev.filter(o => o.y >= 100 && !colisionados.has(o.id))
         if (esquivados.length > 0) {
           setJugadores(jugPrev => {
             const next = { ...jugPrev }
             Object.entries(next).forEach(([id, j]) => {
-              if (j.vivo) next[id] = { ...j, puntos: j.puntos + esquivados.length * 100 }
+              // puntos solo a jugadores no eliminados
+              if (!j.eliminado) next[id] = { ...j, puntos: j.puntos + esquivados.length * 100 }
             })
             return next
           })
         }
 
-
         return prev
-          .filter(o => !colisionados.has(o.id))  
+          .filter(o => !colisionados.has(o.id))
           .map(o => ({ ...o, y: o.y + SPEED_PCT }))
           .filter(o => o.y < 105)
       })
@@ -197,12 +186,11 @@ export default function DodgeLivePage() {
     }
   }, [gameOver])
 
-
   const lista = Object.entries(jugadores).filter(([id]) => id !== 'mall-screen')
 
-
+  // ordenar: activos primero (eliminado=false), luego por puntos
   const listaOrdenada = [...lista].sort(([, a], [, b]) => {
-    if (a.vivo !== b.vivo) return a.vivo ? -1 : 1
+    if (a.eliminado !== b.eliminado) return a.eliminado ? 1 : -1
     return b.puntos - a.puntos
   })
 
@@ -227,12 +215,10 @@ export default function DodgeLivePage() {
       <div className="mall-pattern" aria-hidden />
       <MallHeader />
 
-
       <div className="dodge-top">
         <h1 className="dodge-top__title">¡JUEGO EN VIVO!</h1>
         <span className="dodge-top__tag">DODGE GAME</span>
       </div>
-
 
       {countdown !== null && countdown > 0 && (
         <div className="dodge-countdown">
@@ -240,23 +226,19 @@ export default function DodgeLivePage() {
         </div>
       )}
 
-
       {lista.length === 0 ? (
         <p className="dodge-empty">Esperando jugadores...</p>
       ) : (
         <div
           className="dodge-grid"
-          style={{
-            gridTemplateColumns: `repeat(${Math.min(lista.length, 4)}, 1fr)`,
-          }}
+          style={{ gridTemplateColumns: `repeat(${Math.min(lista.length, 4)}, 1fr)` }}
         >
           {listaOrdenada.map(([id, j]) => (
             <div
               key={id}
-              className={`dodge-card ${!j.vivo ? 'dodge-card--dead' : ''}`}
+              className={`dodge-card ${j.eliminado ? 'dodge-card--dead' : ''}`}
               style={{ '--player-color': j.color } as React.CSSProperties}
             >
-              
               <div className="dodge-card__header">
                 <span className="dodge-card__name" style={{ color: j.color }}>
                   {j.nombre}
@@ -264,7 +246,6 @@ export default function DodgeLivePage() {
               </div>
 
               <div className="dodge-card__field">
-                
                 {Array.from({ length: LANES - 1 }, (_, i) => (
                   <div
                     key={i}
@@ -273,29 +254,26 @@ export default function DodgeLivePage() {
                   />
                 ))}
 
-                
                 {obstaculos.map(o => (
                   <div
                     key={o.id}
                     className="dodge-obstacle"
-                    style={{
-                      left: `${laneX(o.lane)}%`,
-                      top:  `${o.y}%`,
-                    }}
+                    style={{ left: `${laneX(o.lane)}%`, top: `${o.y}%` }}
                   />
                 ))}
 
                 <div
-                  className={`dodge-player ${!j.vivo ? 'dodge-player--dead' : ''}`}
+                  className={`dodge-player ${j.eliminado ? 'dodge-player--dead' : ''}`}
                   style={{
                     left:       `${laneX(j.carril)}%`,
-                    background: j.vivo ? j.color : 'rgba(255,255,255,0.2)',
+                    background: j.eliminado ? 'rgba(255,255,255,0.2)' : j.color,
                   }}
                 >
                   ▲
                 </div>
 
-                {!j.vivo && (
+                {/* ELIMINADO solo aparece cuando vidas === 0 */}
+                {j.eliminado && (
                   <div className="dodge-dead-overlay">
                     <span>💀</span>
                     <p>ELIMINADO</p>
@@ -351,21 +329,6 @@ export default function DodgeLivePage() {
                   </div>
                 )
               })}
-            </div>
-            <div className="dodge-results-list">
-              {rankingRef.current.map((j, i) => (
-                <div key={j.jugadorId} className="dodge-results-row" style={{ borderColor: j.color }}>
-                  <span className="dodge-results-row__medal">{getMedal(i)}</span>
-                  <span
-                    className="dodge-results-row__dot"
-                    style={{ background: j.color }}
-                  />
-                  <span className="dodge-results-row__name">{j.nombre}</span>
-                  <span className="dodge-results-row__pts" style={{ color: j.color }}>
-                    {j.puntos.toLocaleString()} pts
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
         </div>
