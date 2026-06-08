@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSocket } from "../../hooks/useSocket";
 import "../../styles/pages/admin/validate.css";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "";
@@ -29,6 +30,7 @@ interface Stats {
 
 export default function ValidatePage() {
   const navigate = useNavigate();
+  const socket   = useSocket();
 
   const [cupones,      setCupones]      = useState<Cupon[]>([]);
   const [stats,        setStats]        = useState<Stats>({ totalGenerados: 0, canjeados: 0, pendientes: 0, expirados: 0 });
@@ -71,9 +73,19 @@ export default function ValidatePage() {
   
   useEffect(() => {
     cargarCupones();
-    const intervalo = setInterval(cargarCupones, 5000);
+    const intervalo = setInterval(cargarCupones, 15_000); // fallback cada 15s
     return () => clearInterval(intervalo);
   }, [cargarCupones]);
+
+  useEffect(() => {
+    const actualizar = () => { setTimeout(cargarCupones, 800); };
+    socket.on("partida-finalizada", actualizar);
+    socket.on("player-finished", actualizar);
+    return () => {
+      socket.off("partida-finalizada", actualizar);
+      socket.off("player-finished", actualizar);
+    };
+  }, [socket, cargarCupones]);
 
   
   const resetear = () => {

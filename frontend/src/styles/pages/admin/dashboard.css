@@ -1,4 +1,3 @@
-
 .dash-page {
   position: relative;
   display: flex;
@@ -112,6 +111,15 @@
   font-weight: 700;
   color: rgba(255, 255, 255, 0.92);
   margin-bottom: 0.25rem;
+}
+
+.dash-section-title__live {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: #a4ff00;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
 }
 
 .dash-section-title__sep {

@@ -26,10 +26,10 @@ function enviarCuponPorCorreo(cupon: Coupon) {
     EMAILJS_TEMPLATE_ID,
     {
       to_email: correo,
-      nombre: localStorage.getItem('nombre') ?? 'Jugador',
+      nombre:   localStorage.getItem('nombre') ?? 'Jugador',
       correo,
-      codigo: cupon.codigo,
-      nivel: cupon.nivel,
+      codigo:   cupon.codigo,
+      nivel:    cupon.nivel,
       descuento: String(cupon.descuento),
     },
     EMAILJS_PUBLIC_KEY
@@ -39,99 +39,162 @@ function enviarCuponPorCorreo(cupon: Coupon) {
 export default function ResultPage() {
   const navigate  = useNavigate()
   const socket    = useSocket()
-  const [ranking, setRanking] = useState<JugadorRanking[]>([])
-  const [cupon, setCupon]     = useState<Coupon | null>(null)
+  const [ranking,    setRanking]    = useState<JugadorRanking[]>([])
+  const [cupon,      setCupon]      = useState<Coupon | null>(null)
+  const [esperando,  setEsperando]  = useState(true)
+  const [generando,  setGenerando]  = useState(false)
+
   const jugadorId = localStorage.getItem('jugadorId') ?? ''
   const salaId    = localStorage.getItem('salaId') ?? 'sala-001'
 
   useEffect(() => {
-    // Escuchar ranking de la partida actual via socket
-    socket.on('ranking-partida', (data: JugadorRanking[]) => {
+    const procesarRanking = async (data: JugadorRanking[]) => {
       if (data.length === 0) return
       setRanking(data)
+      setEsperando(false)
 
-      // Generar cupón si está en top 3
       const posicion = data.findIndex(j => j.jugadorId === jugadorId) + 1
-      if (posicion >= 1 && posicion <= 3 && !cupon) {
-        fetch(`${API_BASE}/coupons/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jugadorId, posicion })
-        })
-          .then(r => r.json())
-          .then(cd => {
-            if (cd.success) {
-              setCupon(cd.data)
-              enviarCuponPorCorreo(cd.data)
-            }
+      if (posicion >= 1 && posicion <= 3 && !cupon && !generando) {
+        setGenerando(true)
+        try {
+          const res = await fetch(`${API_BASE}/coupons/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jugadorId, posicion }),
           })
+          const cd = await res.json()
+          if (cd.success) {
+            setCupon(cd.data)
+            enviarCuponPorCorreo(cd.data)
+          }
+        } catch (e) {
+          console.error('Error generando cupón:', e)
+        } finally {
+          setGenerando(false)
+        }
       }
+    }
+
+    socket.on('ranking-partida', procesarRanking)
+    socket.on('partida-finalizada', ({ ranking }: { ranking: JugadorRanking[] }) => {
+      procesarRanking(ranking)
     })
 
-    return () => { socket.off('ranking-partida') }
-  }, [socket, jugadorId, salaId, cupon])
+    return () => {
+      socket.off('ranking-partida')
+      socket.off('partida-finalizada')
+    }
+  }, [socket, jugadorId, cupon, generando, salaId])
 
   const medallas = ['🥇', '🥈', '🥉']
-  const posicion = ranking.findIndex(j => j.jugadorId === jugadorId) + 1
+  const posicion  = ranking.findIndex(j => j.jugadorId === jugadorId) + 1
   const misPuntos = ranking.find(j => j.jugadorId === jugadorId)?.puntos ?? 0
-  const lugares = ['', 'PRIMER LUGAR', 'SEGUNDO LUGAR', 'TERCER LUGAR']
+  const lugares   = ['', 'PRIMER LUGAR', 'SEGUNDO LUGAR', 'TERCER LUGAR']
+
+
+  if (esperando) {
+    return (
+      <div className="snap-screen">
+        <div className="snap-pattern snap-pattern--teal" aria-hidden />
+        <SnapHeader compact />
+        <main className="snap-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', paddingTop: '3rem' }}>
+          <div style={{ fontSize: '3rem' }}>⏳</div>
+          <h2 className="snap-title" style={{ textAlign: 'center' }}>
+            ¡Terminaste!
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', fontSize: '1rem' }}>
+            Esperando que los demás jugadores terminen…
+          </p>
+          <div style={{
+            display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '0.5rem'
+          }}>
+            {[0,1,2].map(i => (
+              <span key={i} style={{
+                width: 10, height: 10, borderRadius: '50%',
+                background: '#7c3aed',
+                animation: `pulse 1.2s ease-in-out ${i * 0.4}s infinite`,
+              }} />
+            ))}
+          </div>
+          <style>{`
+            @keyframes pulse {
+              0%, 100% { opacity: 0.2; transform: scale(0.8); }
+              50% { opacity: 1; transform: scale(1.2); }
+            }
+          `}</style>
+        </main>
+      </div>
+    )
+  }
+
 
   return (
     <div className="snap-screen">
       <div className="snap-pattern snap-pattern--teal" aria-hidden />
       <SnapHeader compact />
       <main className="snap-content">
-        {cupon ? (
+
+        {posicion >= 1 && posicion <= 3 ? (
           <>
             <div className="result-status result-status--win">
               <h2>¡Felicitaciones!</h2>
               <p className="result-place">{lugares[posicion] || 'TOP 3'}</p>
             </div>
+
             <div className="result-points">
               <p className="result-points__value">{misPuntos.toLocaleString()}</p>
               <p className="result-points__label">Puntos totales</p>
             </div>
-            <div className="result-prize-card">
-              <p className="result-prize-card__title">Tu premio</p>
-              <p className="result-prize-card__discount">{cupon.descuento}% OFF</p>
-              <p className="result-prize-card__meta">Nivel {cupon.nivel} — Muéstraselo al cajero</p>
-              <span className="result-code">{cupon.codigo}</span>
-            </div>
-            <div className="result-email-box">
-              Cupón enviado a <strong>{localStorage.getItem('correo') ?? 'tu correo'}</strong>
-            </div>
+
+            {cupon ? (
+              <>
+                <div className="result-prize-card">
+                  <p className="result-prize-card__title">Tu premio</p>
+                  <p className="result-prize-card__discount">{cupon.descuento}% OFF</p>
+                  <p className="result-prize-card__meta">
+                    Nivel {cupon.nivel} — Muéstraselo al cajero
+                  </p>
+                  <span className="result-code">{cupon.codigo}</span>
+                </div>
+                <div className="result-email-box">
+                  Cupón enviado a <strong>{localStorage.getItem('correo') ?? 'tu correo'}</strong>
+                </div>
+              </>
+            ) : (
+              <div className="result-prize-card" style={{ opacity: 0.6 }}>
+                <p className="result-prize-card__title">Generando tu cupón…</p>
+              </div>
+            )}
           </>
-        ) : posicion > 3 ? (
+        ) : (
           <>
             <div className="result-status result-status--lose">
-              <h2>¡Casi lo logras!</h2>
-              <p>Esta vez no estás en el top 3, ¡buen intento!</p>
+              <h2>¡Buen intento!</h2>
+              <p>Esta vez no estás en el top 3</p>
             </div>
             <div className="result-points">
               <p className="result-points__value">{misPuntos.toLocaleString()}</p>
               <p className="result-points__label">Tus puntos</p>
             </div>
           </>
-        ) : (
-          <div className="result-status result-status--lose">
-            <h2>Calculando resultado...</h2>
-            <p>Espera un momento</p>
-          </div>
         )}
+
 
         {ranking.length > 0 && (
           <>
             <h2 className="snap-title snap-title--sm">Top 3 — Esta partida</h2>
             <div className="result-ranking">
               {ranking.slice(0, 3).map((j, i) => (
-                <p key={j.jugadorId}>
+                <p key={j.jugadorId} style={{ fontWeight: j.jugadorId === jugadorId ? 800 : 500 }}>
                   {medallas[i]} {j.nombre} — {j.puntos.toLocaleString()} pts
+                  {j.jugadorId === jugadorId ? ' 👈' : ''}
                 </p>
               ))}
             </div>
           </>
         )}
       </main>
+
       <div className="snap-footer-actions">
         <button type="button" className="btn-primary" onClick={() => navigate('/final-round')}>
           Continuar
