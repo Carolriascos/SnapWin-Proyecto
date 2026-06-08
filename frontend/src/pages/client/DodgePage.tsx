@@ -38,12 +38,27 @@ export default function DodgePage() {
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
   const salaId = localStorage.getItem('salaId') ?? 'sala-001'
 
+  const emitSync = useCallback(() => {
+    const lane = carrilRef.current
+    const pos = laneToPercent(lane)
+    socket.emit('dodge-data', { salaId, jugadorId, carril: lane, posicion: pos, angulo: 0 })
+    socket.emit('dodge-sync', {
+      salaId,
+      jugadorId,
+      carril: lane,
+      vidas: vidasRef.current,
+      puntos: puntosRef.current,
+      eliminado: vidasRef.current <= 0,
+      obstaculos: obstaculosRef.current.map((o) => ({ id: o.id, lane: o.lane, y: o.y })),
+    })
+  }, [socket, salaId, jugadorId])
+
   const emitPosicion = useCallback(
     (lane: number) => {
-      const pos = laneToPercent(lane)
-      socket.emit('dodge-data', { salaId, jugadorId, carril: lane, posicion: pos, angulo: 0 })
+      carrilRef.current = lane
+      emitSync()
     },
-    [socket, salaId, jugadorId]
+    [emitSync]
   )
 
   const setCarrilSeguro = useCallback(
@@ -75,6 +90,7 @@ export default function DodgePage() {
     setParpadeo(true)
     vidasRef.current -= 1
     setVidas(vidasRef.current)
+    emitSync()
     setTimeout(() => {
       invencibleRef.current = false
       setParpadeo(false)
@@ -82,7 +98,7 @@ export default function DodgePage() {
     if (vidasRef.current <= 0) {
       setTimeout(() => terminar(), 400)
     }
-  }, [terminar])
+  }, [terminar, emitSync])
 
   
   useEffect(() => {
@@ -119,13 +135,14 @@ export default function DodgePage() {
 
       puntosRef.current += 2
       setPuntos(puntosRef.current)
+      emitSync()
     }, TICK_MS)
 
     return () => {
       clearInterval(spawn)
       clearInterval(tick)
     }
-  }, [perderVida, terminar])
+  }, [perderVida, terminar, emitSync])
 
   
   useEffect(() => {
@@ -178,8 +195,10 @@ export default function DodgePage() {
   }, [setCarrilSeguro])
 
   useEffect(() => {
-    emitPosicion(carrilRef.current)
-  }, [emitPosicion])
+    emitSync()
+  }, [emitSync])
+
+  const eliminado = vidas <= 0
 
   const timerClass =
     segundos > 15 ? 'dodge-timer--ok' : segundos > 5 ? 'dodge-timer--warn' : 'dodge-timer--danger'
@@ -226,11 +245,18 @@ export default function DodgePage() {
           ))}
 
           <div
-            className={`dodge-player-arrow ${parpadeo ? 'dodge-player--blink' : ''}`}
+            className={`dodge-player-arrow ${parpadeo ? 'dodge-player--blink' : ''} ${eliminado ? 'dodge-player--dead' : ''}`}
             style={{ left: `${laneToPercent(carril)}%` }}
           >
             ▲
           </div>
+
+          {eliminado && (
+            <div className="dodge-dead-overlay" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', zIndex: 10, borderRadius: 'inherit' }}>
+              <span style={{ fontSize: '2rem' }}>💀</span>
+              <p style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem', margin: '0.25rem 0 0' }}>ELIMINADO</p>
+            </div>
+          )}
         </div>
 
         <div className="dodge-controls">

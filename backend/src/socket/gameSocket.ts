@@ -7,15 +7,65 @@ export const setupSocket = (io: Server) => {
   const salaCountdownStarted: Map<string, boolean> = new Map();
   const salaPuntajes: Map<string, Record<string, number>> = new Map();
   const salaTerminados: Map<string, Set<string>> = new Map();
-  // Para "iniciar ronda" admin: arranca inmediatamente si ya hay >=2 jugadores
-  const salaAdminStarted: Map<string, boolean> = new Map();
+  const salaAdminWantsStart: Map<string, boolean> = new Map();
+  const salaCountdownIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
-  const emitirStatsDia = async () => {
+  const emitirStatsDia = async (salaId = "sala-001") => {
     try {
       const res = await ScoresRepository.getStatsDia();
-      if (res.success) io.to("sala-001").emit("stats-dia", res.data);
+      if (res.success) io.to(salaId).emit("stats-dia", res.data);
     } catch (e) {
       console.error("Error emitiendo stats:", e);
+    }
+  };
+
+  const cancelCountdown = (salaId: string) => {
+    const interval = salaCountdownIntervals.get(salaId);
+    if (interval) {
+      clearInterval(interval);
+      salaCountdownIntervals.delete(salaId);
+    }
+  };
+
+  const startGame = (salaId: string) => {
+    cancelCountdown(salaId);
+    salaCountdownStarted.set(salaId, true);
+    salaAdminWantsStart.delete(salaId);
+    const game = salaGameMode.get(salaId) ?? "shake";
+    io.to(salaId).emit("game-start", { salaId, game, timestamp: Date.now() });
+    io.to(salaId).emit("countdown", { count: 0 });
+  };
+
+  const startCountdown = (salaId: string) => {
+    cancelCountdown(salaId);
+    let count = 30;
+    io.to(salaId).emit("countdown", { count });
+
+    const interval = setInterval(() => {
+      count--;
+      if (count >= 0) {
+        io.to(salaId).emit("countdown", { count });
+      }
+      if (count < 0) {
+        cancelCountdown(salaId);
+        startGame(salaId);
+      }
+    }, 1000);
+
+    salaCountdownIntervals.set(salaId, interval);
+  };
+
+  const tryStartLobby = (salaId: string) => {
+    const jugadoresEnSala = salas.get(salaId) ?? [];
+    const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
+
+    if (humanos < 2 || salaCountdownStarted.get(salaId)) return;
+
+    if (salaAdminWantsStart.get(salaId)) {
+      startGame(salaId);
+    } else {
+      salaCountdownStarted.set(salaId, true);
+      startCountdown(salaId);
     }
   };
 
@@ -34,18 +84,15 @@ export const setupSocket = (io: Server) => {
         salaGameMode.set(salaId, modo);
       }
 
-      jugadoresEnSala.push({ ...jugador, socketId: socket.id, gameMode: modo });
-      salas.set(salaId, jugadoresEnSala);
+      const existente = jugadoresEnSala.findIndex((j) => j.id === jugador?.id);
+      const entrada = { ...jugador, socketId: socket.id, gameMode: modo };
+      if (existente >= 0) jugadoresEnSala[existente] = entrada;
+      else jugadoresEnSala.push(entrada);
 
+      salas.set(salaId, jugadoresEnSala);
       io.to(salaId).emit("players-update", jugadoresEnSala);
 
-      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
-
-      // Arranca countdown automático con >=2 jugadores (solo si admin no lo inició ya)
-      if (humanos >= 2 && !salaCountdownStarted.get(salaId) && !salaAdminStarted.get(salaId)) {
-        salaCountdownStarted.set(salaId, true);
-        startCountdown(io, salaId, salaGameMode);
-      }
+      tryStartLobby(salaId);
     });
 
     socket.on("shake-data", (data: { salaId: string; jugadorId: string; fuerza: number }) => {
@@ -67,6 +114,21 @@ export const setupSocket = (io: Server) => {
         carril: data.carril,
       });
     });
+
+    socket.on(
+      "dodge-sync",
+      (data: {
+        salaId: string;
+        jugadorId: string;
+        carril: number;
+        vidas: number;
+        puntos: number;
+        eliminado: boolean;
+        obstaculos?: { id: number; lane: number; y: number }[];
+      }) => {
+        io.to(data.salaId).emit("dodge-player-state", data);
+      },
+    );
 
     socket.on("game-over", async (data: { salaId: string; jugadorId: string; puntos: number }) => {
       const { salaId, jugadorId, puntos } = data;
@@ -104,34 +166,32 @@ export const setupSocket = (io: Server) => {
       if (todosTerminaron) {
         io.to(salaId).emit("ranking-partida", rankingParcial);
         io.to(salaId).emit("partida-finalizada", { ranking: rankingParcial });
-        setTimeout(emitirStatsDia, 500);
+        salaCountdownStarted.delete(salaId);
+        cancelCountdown(salaId);
+        salaAdminWantsStart.delete(salaId);
+        setTimeout(() => emitirStatsDia(salaId), 500);
       } else {
         io.to(salaId).emit("ranking-parcial", rankingParcial);
       }
     });
 
-    // Admin inicia ronda: arranca INMEDIATAMENTE si hay >=2 jugadores, sino espera
     socket.on("admin-start-round", (data: { salaId: string }) => {
       const salaId = data.salaId;
       const jugadoresEnSala = salas.get(salaId) ?? [];
-      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
+      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
 
-      // Resetear estado de la ronda
-      salaCountdownStarted.delete(salaId);
-      salaAdminStarted.set(salaId, true);
+      salaAdminWantsStart.set(salaId, true);
       salaPuntajes.set(salaId, {});
       salaTerminados.set(salaId, new Set());
       io.to(salaId).emit("ranking-partida", []);
+      cancelCountdown(salaId);
+      salaCountdownStarted.delete(salaId);
 
-      if (humanos.length >= 2) {
-        // Arranca inmediatamente sin countdown
-        const game = salaGameMode.get(salaId) ?? "shake";
-        io.to(salaId).emit("game-start", { salaId, game, timestamp: Date.now() });
-        console.log(`Admin arrancó ronda inmediata en ${salaId} con ${humanos.length} jugadores`);
+      if (humanos >= 2) {
+        startGame(salaId);
+        console.log(`Admin saltó countdown en ${salaId} con ${humanos} jugadores`);
       } else {
-        // Espera a que lleguen 2 jugadores, luego arranca inmediato
-        console.log(`Admin configuró inicio inmediato en ${salaId}, esperando jugadores...`);
-        // Cuando llegue el jugador #2, el join-sala detectará salaAdminStarted=true y arrancará
+        console.log(`Admin esperando 2º jugador en ${salaId}`);
       }
     });
 
@@ -144,14 +204,13 @@ export const setupSocket = (io: Server) => {
       }
     });
 
+    socket.on("cupon-generado", async (data: { salaId: string }) => {
+      await emitirStatsDia(data.salaId);
+    });
+
     socket.on("cupon-canjeado", async (data: { salaId: string; codigo: string }) => {
       io.to(data.salaId).emit("cupon-actualizado", { codigo: data.codigo });
-      try {
-        const res = await ScoresRepository.getStatsDia();
-        if (res.success) io.to(data.salaId).emit("stats-dia", res.data);
-      } catch (e) {
-        console.error("Error emitiendo stats tras canje:", e);
-      }
+      await emitirStatsDia(data.salaId);
     });
 
     socket.on("disconnect", () => {
@@ -160,26 +219,14 @@ export const setupSocket = (io: Server) => {
         salas.set(salaId, actualizados);
         const humanosActuales = actualizados.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
         if (humanosActuales === 0) {
+          cancelCountdown(salaId);
           salaGameMode.delete(salaId);
           salaCountdownStarted.delete(salaId);
-          salaAdminStarted.delete(salaId);
+          salaAdminWantsStart.delete(salaId);
           salaTerminados.set(salaId, new Set());
         }
         io.to(salaId).emit("players-update", actualizados);
       });
     });
   });
-};
-
-const startCountdown = (io: Server, salaId: string, salaGameMode?: Map<string, "shake" | "dodge">) => {
-  let count = 30;
-  const interval = setInterval(() => {
-    io.to(salaId).emit("countdown", { count });
-    count--;
-    if (count < 0) {
-      clearInterval(interval);
-      const game = salaGameMode?.get(salaId) ?? "shake";
-      io.to(salaId).emit("game-start", { salaId, game, timestamp: Date.now() });
-    }
-  }, 1000);
 };

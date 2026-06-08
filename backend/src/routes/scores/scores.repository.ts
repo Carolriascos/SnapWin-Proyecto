@@ -2,11 +2,16 @@ import { SupabaseClient } from "../../clients/SupabaseClient"
 import { ScorePayload, ApiResponse } from "../../types/types"
 
 const inicioDia = (): string => {
-  const ahora = new Date()
-  const co = new Date(ahora.toLocaleString("en-US", { timeZone: "America/Bogota" }))
-  co.setHours(0, 0, 0, 0)
-  const diff = ahora.getTime() - new Date(ahora.toLocaleString("en-US", { timeZone: "America/Bogota" })).getTime()
-  return new Date(co.getTime() + diff).toISOString()
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date())
+  const y = parts.find((p) => p.type === "year")!.value
+  const m = parts.find((p) => p.type === "month")!.value
+  const d = parts.find((p) => p.type === "day")!.value
+  return new Date(`${y}-${m}-${d}T00:00:00-05:00`).toISOString()
 }
 
 const getTop3 = async (salaId: string): Promise<ApiResponse<any[]>> => {

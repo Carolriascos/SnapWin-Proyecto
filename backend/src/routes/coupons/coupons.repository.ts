@@ -77,14 +77,44 @@ const validateCoupon = async (
 
 
 const redeemCoupon = async (codigo: string): Promise<ApiResponse<any>> => {
+  const validacion = await validateCoupon(codigo);
+  if (!validacion.success || !validacion.data?.valido) {
+    return { success: false, error: validacion.data?.motivo ?? "Cupón no válido" };
+  }
+
   const { data, error } = await SupabaseClient.from("cupones")
-    .update({ canjeado: true, canjeado_at: new Date().toISOString() })
+    .update({ canjeado: true })
     .eq("codigo", codigo)
     .select()
     .single();
 
   if (error) {
     console.error("Error al canjear cupón:", error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, data };
+};
+
+const redeemCouponPlayer = async (codigo: string, jugadorId: string): Promise<ApiResponse<any>> => {
+  const validacion = await validateCoupon(codigo);
+  if (!validacion.success || !validacion.data?.valido) {
+    return { success: false, error: validacion.data?.motivo ?? "Cupón no válido" };
+  }
+
+  const coupon = validacion.data.coupon;
+  if (coupon.jugador_id && coupon.jugador_id !== jugadorId) {
+    return { success: false, error: "Este cupón no pertenece a tu cuenta" };
+  }
+
+  const { data, error } = await SupabaseClient.from("cupones")
+    .update({ canjeado: true })
+    .eq("codigo", codigo)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error al canjear cupón (jugador):", error);
     return { success: false, error: error.message };
   }
 
@@ -130,4 +160,4 @@ const listCoupons = async (): Promise<ApiResponse<any[]>> => {
   return { success: true, data: cupones };
 };
 
-export default { generateCoupon, validateCoupon, redeemCoupon, listCoupons };
+export default { generateCoupon, validateCoupon, redeemCoupon, redeemCouponPlayer, listCoupons };

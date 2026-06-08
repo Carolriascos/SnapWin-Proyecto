@@ -58,7 +58,11 @@ export default function ResultPage() {
             body: JSON.stringify({ jugadorId, posicion }),
           })
           const cd = await res.json()
-          if (cd.success) { setCupon(cd.data); enviarCuponPorCorreo(cd.data) }
+          if (cd.success) {
+            setCupon(cd.data)
+            enviarCuponPorCorreo(cd.data)
+            socket.emit('cupon-generado', { salaId })
+          }
         } catch (e) { console.error('Error generando cupón:', e) }
         finally { setGenerando(false) }
       }
@@ -73,11 +77,16 @@ export default function ResultPage() {
     setCanjeando(true)
     setErrorCanje('')
     try {
-      const res  = await fetch(`${API_BASE}/coupons/redeem`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: cupon.codigo }),
+      const res = await fetch(`${API_BASE}/coupons/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: cupon.codigo, jugadorId }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data) {
+        setErrorCanje('Error de conexión al canjear')
+        return
+      }
       if (data.success) {
         setCanjeado(true)
         setCupon(prev => prev ? { ...prev, canjeado: true } : prev)

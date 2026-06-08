@@ -29,9 +29,21 @@ const redeem = async (req: Request, res: Response) => {
   res.json(response);
 };
 
+const redeemPlayer = async (req: Request, res: Response) => {
+  const { codigo, jugadorId } = req.body;
+
+  if (!codigo || !jugadorId) {
+    res.status(400).json({ success: false, error: "codigo y jugadorId son requeridos" });
+    return;
+  }
+
+  const response = await CouponsRepository.redeemCouponPlayer(codigo, jugadorId);
+  res.json(response);
+};
+
 const list = async (_req: Request, res: Response) => {
   const response = await CouponsRepository.listCoupons();
   res.json(response);
 };
 
-export const CouponsController = { generate, validate, redeem, list };
+export const CouponsController = { generate, validate, redeem, redeemPlayer, list };
