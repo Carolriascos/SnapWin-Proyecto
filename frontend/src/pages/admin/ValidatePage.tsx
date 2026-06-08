@@ -4,6 +4,7 @@ import { useSocket } from "../../hooks/useSocket";
 import "../../styles/pages/admin/validate.css";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "";
+const SALA_ID = "sala-001";
 
 interface Cupon {
   codigo: string;
@@ -15,10 +16,14 @@ interface Cupon {
 }
 
 interface InfoCupon {
+  codigo: string;
+  created_at: string;
+  expires_at: string;
+  estadoActual: string;
+  jugador: string;
   nivel: string;
   descuento: number;
-  canjeado: boolean;
-  expires_at: string;
+  canjeado_at?: string | null;
 }
 
 interface Stats {
@@ -27,6 +32,19 @@ interface Stats {
   pendientes: number;
   expirados: number;
 }
+
+type ResultColor = "green" | "yellow" | "red";
+
+const formatFecha = (iso: string | null | undefined): string => {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("es-CO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function ValidatePage() {
   const navigate = useNavigate();
@@ -38,7 +56,7 @@ export default function ValidatePage() {
 
   const [codigo,    setCodigo]    = useState("");
   const [resultado, setResultado] = useState<string | null>(null);
-  const [colorRes,  setColorRes]  = useState<"green" | "red">("green");
+  const [colorRes,  setColorRes]  = useState<ResultColor>("green");
   const [cargando,  setCargando]  = useState(false);
   const [infoCupon, setInfoCupon] = useState<InfoCupon | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -53,41 +71,59 @@ export default function ValidatePage() {
       const res  = await fetch(`${BACKEND}/coupons/list`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (res.status === 401) {
+        localStorage.removeItem("adminLoggedIn");
+        localStorage.removeItem("adminToken");
+        navigate("/admin");
+        return;
+      }
+
       const data = await res.json();
 
-      if (data.success && Array.isArray(data.data)) {
-        const lista: Cupon[] = data.data;
-        setCupones(lista);
-        setStats({
+      if (data.success && data.data) {
+        const lista: Cupon[] = data.data.cupones ?? data.data;
+        const statsApi: Stats = data.data.stats ?? {
           totalGenerados: lista.length,
           canjeados:  lista.filter((c) => c.estado === "Canjeado").length,
           pendientes: lista.filter((c) => c.estado === "Pendiente").length,
           expirados:  lista.filter((c) => c.estado === "Expirado").length,
-        });
+        };
+        setCupones(lista);
+        setStats(statsApi);
       }
     } catch (e) {
       console.error("Error cargando cupones:", e);
     } finally {
       setCargandoLista(false);
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     cargarCupones();
-    const intervalo = setInterval(cargarCupones, 10_000); // actualiza cada 10s
+    const intervalo = setInterval(cargarCupones, 10_000);
     return () => clearInterval(intervalo);
   }, [cargarCupones]);
 
-  // Actualización en tiempo real por socket
   useEffect(() => {
-    const actualizar = () => setTimeout(cargarCupones, 500);
+    const emitJoin = () => {
+      socket.emit("join-sala", { salaId: SALA_ID, jugador: { id: "admin-panel", nombre: "Admin" } });
+    };
+    if (socket.connected) emitJoin();
+    else socket.on("connect", emitJoin);
+
+    const actualizar = () => setTimeout(cargarCupones, 400);
     socket.on("partida-finalizada", actualizar);
     socket.on("player-finished",    actualizar);
     socket.on("cupon-actualizado",  actualizar);
+    socket.on("stats-dia",          actualizar);
+
     return () => {
+      socket.off("connect", emitJoin);
       socket.off("partida-finalizada", actualizar);
       socket.off("player-finished",    actualizar);
       socket.off("cupon-actualizado",  actualizar);
+      socket.off("stats-dia",          actualizar);
     };
   }, [socket, cargarCupones]);
 
@@ -96,6 +132,19 @@ export default function ValidatePage() {
     setResultado(null);
     setInfoCupon(null);
     setModalOpen(false);
+  };
+
+  const mostrarDetalle = (coupon: any) => {
+    setInfoCupon({
+      codigo:       coupon.codigo,
+      created_at:   coupon.created_at,
+      expires_at:   coupon.expires_at,
+      estadoActual: coupon.estadoActual ?? coupon.estado ?? "-",
+      jugador:      coupon.jugador ?? coupon.jugadores?.nombre ?? "Sin asignar",
+      nivel:        coupon.nivel,
+      descuento:    coupon.descuento,
+      canjeado_at:  coupon.canjeado_at,
+    });
   };
 
   const validar = async () => {
@@ -110,21 +159,52 @@ export default function ValidatePage() {
       const res  = await fetch(`${BACKEND}/coupons/validate/${upper}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (res.status === 401) {
+        localStorage.removeItem("adminLoggedIn");
+        localStorage.removeItem("adminToken");
+        navigate("/admin");
+        return;
+      }
+
       const data = await res.json();
 
       if (!data.success) {
-        setResultado("Error del servidor");
+        setResultado("❌ Error del servidor");
         setColorRes("red");
         return;
       }
 
-      const { valido, motivo, coupon } = data.data;
+      const { valido, estado, mensaje, coupon } = data.data;
+
+      if (estado === "no_encontrado") {
+        setResultado(mensaje);
+        setColorRes("red");
+        return;
+      }
+
+      if (estado === "canjeado") {
+        setResultado(mensaje);
+        setColorRes("yellow");
+        mostrarDetalle(coupon);
+        return;
+      }
+
+      if (estado === "expirado") {
+        setResultado(mensaje);
+        setColorRes("yellow");
+        mostrarDetalle(coupon);
+        return;
+      }
 
       if (!valido) {
-        setResultado(`NO VÁLIDO: ${motivo}`);
+        setResultado(mensaje ?? "❌ Cupón no válido");
         setColorRes("red");
         return;
       }
+
+      mostrarDetalle(coupon);
+      setResultado(mensaje);
 
       const redeem = await fetch(`${BACKEND}/coupons/redeem/${upper}`, {
         method: "PATCH",
@@ -133,23 +213,17 @@ export default function ValidatePage() {
       const rd = await redeem.json();
 
       if (rd.success) {
-        setResultado("CANJEADO EXITOSAMENTE ✅");
         setColorRes("green");
-        setInfoCupon({
-          nivel:      coupon.nivel,
-          descuento:  coupon.descuento,
-          canjeado:   true,
-          expires_at: coupon.expires_at,
-        });
+        setInfoCupon((prev) => prev ? { ...prev, estadoActual: "Canjeado", canjeado_at: new Date().toISOString() } : prev);
         setCodigo("");
-        socket.emit("cupon-canjeado", { salaId: "sala-001", codigo: upper });
+        socket.emit("cupon-canjeado", { salaId: SALA_ID, codigo: upper });
         await cargarCupones();
       } else {
-        setResultado(`Error al canjear: ${rd.error}`);
+        setResultado(`❌ Error al canjear: ${rd.error}`);
         setColorRes("red");
       }
     } catch {
-      setResultado("Sin conexión al servidor");
+      setResultado("❌ Sin conexión al servidor");
       setColorRes("red");
     } finally {
       setCargando(false);
@@ -270,9 +344,17 @@ export default function ValidatePage() {
                 <p className="val-modal__result-title">{resultado}</p>
                 {infoCupon && (
                   <div className="val-modal__result-detail">
-                    <p>Nivel: <strong>{infoCupon.nivel}</strong></p>
-                    <p>Descuento: <strong>{infoCupon.descuento}%</strong></p>
-                    <p>Vencía: {new Date(infoCupon.expires_at).toLocaleDateString()}</p>
+                    <p>Código: <strong>{infoCupon.codigo}</strong></p>
+                    <p>Fecha de creación: {formatFecha(infoCupon.created_at)}</p>
+                    <p>Fecha de expiración: {formatFecha(infoCupon.expires_at)}</p>
+                    <p>Estado actual: <strong>{infoCupon.estadoActual}</strong></p>
+                    <p>Usuario asociado: <strong>{infoCupon.jugador}</strong></p>
+                    {infoCupon.canjeado_at && (
+                      <p>Fecha de canje: {formatFecha(infoCupon.canjeado_at)}</p>
+                    )}
+                    {colorRes === "green" && (
+                      <p>Nivel: <strong>{infoCupon.nivel}</strong> — Descuento: <strong>{infoCupon.descuento}%</strong></p>
+                    )}
                   </div>
                 )}
                 <button className="val-modal__reset" onClick={resetear}>

@@ -27,6 +27,9 @@ export default function LoginAdminPage() {
       if (data.success) {
         localStorage.setItem("adminLoggedIn", "true");
         localStorage.setItem("adminNombre", data.data.nombre);
+        if (data.data.token) {
+          localStorage.setItem("adminToken", data.data.token);
+        }
         navigate("/admin/dashboard");
       } else {
         setError(data.error);

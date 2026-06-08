@@ -204,7 +204,8 @@ export const setupSocket = (io: Server) => {
       }
     });
 
-    socket.on("cupon-generado", async (data: { salaId: string }) => {
+    socket.on("cupon-generado", async (data: { salaId: string; codigo?: string }) => {
+      io.to(data.salaId).emit("cupon-actualizado", { codigo: data.codigo ?? "" });
       await emitirStatsDia(data.salaId);
     });
 

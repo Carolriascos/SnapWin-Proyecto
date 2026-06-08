@@ -1,14 +1,14 @@
 import express from "express";
 import { CouponsController } from "./coupons.controller";
-import { AuthMiddleware } from "../../middlewares/Auth.middleware";
+import { AdminAuthMiddleware } from "../../middlewares/AdminAuth.middleware";
 export const CouponsRouter = express.Router();
 
 CouponsRouter.post("/generate", CouponsController.generate);
 
 CouponsRouter.post("/redeem", CouponsController.redeemPlayer);
 
-CouponsRouter.get("/validate/:codigo", AuthMiddleware, CouponsController.validate);
+CouponsRouter.get("/validate/:codigo", AdminAuthMiddleware, CouponsController.validate);
 
-CouponsRouter.patch("/redeem/:codigo", AuthMiddleware, CouponsController.redeem);
+CouponsRouter.patch("/redeem/:codigo", AdminAuthMiddleware, CouponsController.redeem);
 
-CouponsRouter.get("/list", AuthMiddleware, CouponsController.list);
+CouponsRouter.get("/list", AdminAuthMiddleware, CouponsController.list);

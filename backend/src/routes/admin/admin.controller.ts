@@ -1,5 +1,6 @@
 import { Request, Response } from "express"
 import AdminRepository from "./admin.repository"
+import { generateAdminToken } from "../../middlewares/AdminAuth.middleware"
 
 const register = async (req: Request, res: Response) => {
   const { nombre, usuario, correo, password } = req.body
@@ -22,6 +23,16 @@ const login = async (req: Request, res: Response) => {
     return
   }
   const response = await AdminRepository.loginAdmin({ usuario, password })
+  if (response.success && response.data?.adminId) {
+    res.json({
+      ...response,
+      data: {
+        ...response.data,
+        token: generateAdminToken(response.data.adminId),
+      },
+    })
+    return
+  }
   res.json(response)
 }
 

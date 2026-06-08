@@ -29,9 +29,12 @@ CREATE TABLE IF NOT EXISTS cupones (
   nivel      TEXT NOT NULL,
   descuento  INTEGER NOT NULL,
   canjeado   BOOLEAN DEFAULT FALSE,
+  canjeado_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE cupones ADD COLUMN IF NOT EXISTS canjeado_at TIMESTAMPTZ;
 
 -- Tabla de administradores
 CREATE TABLE IF NOT EXISTS administradores (

@@ -61,7 +61,7 @@ export default function ResultPage() {
           if (cd.success) {
             setCupon(cd.data)
             enviarCuponPorCorreo(cd.data)
-            socket.emit('cupon-generado', { salaId })
+            socket.emit('cupon-generado', { salaId, codigo: cd.data.codigo })
           }
         } catch (e) { console.error('Error generando cupón:', e) }
         finally { setGenerando(false) }

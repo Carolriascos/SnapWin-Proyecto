@@ -1,13 +1,11 @@
 import { SupabaseClient } from "../../clients/SupabaseClient";
 import { ApiResponse, Coupon } from "../../types/types";
 
-
 const PRIZES: Record<number, { nivel: "Oro" | "Plata" | "Bronce"; descuento: number }> = {
   1: { nivel: "Oro", descuento: 20 },
   2: { nivel: "Plata", descuento: 15 },
   3: { nivel: "Bronce", descuento: 10 },
 };
-
 
 const generarCodigo = (): string => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -16,6 +14,29 @@ const generarCodigo = (): string => {
   return `FP-${parte1}-${parte2}`;
 };
 
+const formatFecha = (iso: string | null | undefined): string => {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("es-CO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const calcularEstado = (canjeado: boolean, expiresAt: string): "Canjeado" | "Pendiente" | "Expirado" => {
+  if (canjeado) return "Canjeado";
+  if (new Date(expiresAt) < new Date()) return "Expirado";
+  return "Pendiente";
+};
+
+const mapJuegoNombre = (juego: string | undefined): string => {
+  if (!juego) return "-";
+  if (juego === "shake") return "Shake Battle";
+  if (juego === "dodge") return "Dodge Game";
+  return juego;
+};
 
 const generateCoupon = async (jugadorId: string, posicion: number): Promise<ApiResponse<Coupon>> => {
   const prize = PRIZES[posicion];
@@ -57,24 +78,74 @@ const generateCoupon = async (jugadorId: string, posicion: number): Promise<ApiR
 
 const validateCoupon = async (
   codigo: string,
-): Promise<ApiResponse<{ valido: boolean; motivo?: string; coupon?: any }>> => {
-  const { data, error } = await SupabaseClient.from("cupones").select("*").eq("codigo", codigo).single();
+): Promise<ApiResponse<{ valido: boolean; estado: string; mensaje: string; motivo?: string; coupon?: any }>> => {
+  const { data, error } = await SupabaseClient
+    .from("cupones")
+    .select("*, jugadores(nombre)")
+    .eq("codigo", codigo)
+    .single();
 
   if (error || !data) {
-    return { success: true, data: { valido: false, motivo: "Código no encontrado" } };
+    return {
+      success: true,
+      data: {
+        valido: false,
+        estado: "no_encontrado",
+        mensaje: "❌ Cupón no encontrado.",
+        motivo: "Código no encontrado",
+      },
+    };
   }
 
+  const jugador = (data as any).jugadores?.nombre ?? "Sin asignar";
+  const estadoActual = calcularEstado(data.canjeado, data.expires_at);
+  const detalle = {
+    codigo: data.codigo,
+    created_at: data.created_at,
+    expires_at: data.expires_at,
+    estadoActual,
+    jugador,
+    nivel: data.nivel,
+    descuento: data.descuento,
+    canjeado_at: data.canjeado_at ?? null,
+  };
+
   if (data.canjeado) {
-    return { success: true, data: { valido: false, motivo: "El cupón ya fue canjeado" } };
+    return {
+      success: true,
+      data: {
+        valido: false,
+        estado: "canjeado",
+        mensaje: "⚠️ Este cupón ya fue canjeado.",
+        motivo: "El cupón ya fue canjeado",
+        coupon: { ...data, ...detalle },
+      },
+    };
   }
 
   if (new Date(data.expires_at) < new Date()) {
-    return { success: true, data: { valido: false, motivo: "El cupón ha vencido" } };
+    return {
+      success: true,
+      data: {
+        valido: false,
+        estado: "expirado",
+        mensaje: "⚠️ Este cupón ha expirado y no puede ser utilizado.",
+        motivo: "El cupón ha vencido",
+        coupon: { ...data, ...detalle },
+      },
+    };
   }
 
-  return { success: true, data: { valido: true, coupon: data } };
+  return {
+    success: true,
+    data: {
+      valido: true,
+      estado: "valido",
+      mensaje: "✅ Cupón válido. Puede ser canjeado.",
+      coupon: { ...data, ...detalle },
+    },
+  };
 };
-
 
 const redeemCoupon = async (codigo: string): Promise<ApiResponse<any>> => {
   const validacion = await validateCoupon(codigo);
@@ -82,11 +153,22 @@ const redeemCoupon = async (codigo: string): Promise<ApiResponse<any>> => {
     return { success: false, error: validacion.data?.motivo ?? "Cupón no válido" };
   }
 
-  const { data, error } = await SupabaseClient.from("cupones")
-    .update({ canjeado: true })
+  const now = new Date().toISOString();
+  let { data, error } = await SupabaseClient.from("cupones")
+    .update({ canjeado: true, canjeado_at: now })
     .eq("codigo", codigo)
-    .select()
+    .select("*, jugadores(nombre)")
     .single();
+
+  if (error?.message?.includes("canjeado_at")) {
+    const fallback = await SupabaseClient.from("cupones")
+      .update({ canjeado: true })
+      .eq("codigo", codigo)
+      .select("*, jugadores(nombre)")
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error("Error al canjear cupón:", error);
@@ -107,11 +189,22 @@ const redeemCouponPlayer = async (codigo: string, jugadorId: string): Promise<Ap
     return { success: false, error: "Este cupón no pertenece a tu cuenta" };
   }
 
-  const { data, error } = await SupabaseClient.from("cupones")
-    .update({ canjeado: true })
+  const now = new Date().toISOString();
+  let { data, error } = await SupabaseClient.from("cupones")
+    .update({ canjeado: true, canjeado_at: now })
     .eq("codigo", codigo)
     .select()
     .single();
+
+  if (error?.message?.includes("canjeado_at")) {
+    const fallback = await SupabaseClient.from("cupones")
+      .update({ canjeado: true })
+      .eq("codigo", codigo)
+      .select()
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error("Error al canjear cupón (jugador):", error);
@@ -121,43 +214,76 @@ const redeemCouponPlayer = async (codigo: string, jugadorId: string): Promise<Ap
   return { success: true, data };
 };
 
-const listCoupons = async (): Promise<ApiResponse<any[]>> => {
-  const { data, error } = await SupabaseClient
+const listCoupons = async (): Promise<ApiResponse<{ cupones: any[]; stats: { totalGenerados: number; canjeados: number; pendientes: number; expirados: number } }>> => {
+  const selectConCanje = "codigo, nivel, descuento, canjeado, canjeado_at, expires_at, created_at, jugador_id, jugadores(nombre)";
+  const selectSinCanje = "codigo, nivel, descuento, canjeado, expires_at, created_at, jugador_id, jugadores(nombre)";
+
+  let data: any[] | null = null;
+  let error: { message: string } | null = null;
+
+  const primary = await SupabaseClient
     .from("cupones")
-    .select("codigo, nivel, descuento, canjeado, canjeado_at, expires_at, jugador_id, jugadores(nombre)")
+    .select(selectConCanje)
     .order("created_at", { ascending: false });
+  data = primary.data;
+  error = primary.error;
+
+  if (error?.message?.includes("canjeado_at")) {
+    const fallback = await SupabaseClient
+      .from("cupones")
+      .select(selectSinCanje)
+      .order("created_at", { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error("Error al listar cupones:", error);
     return { success: false, error: error.message };
   }
 
+  const jugadorIds = [...new Set((data ?? []).map((c: any) => c.jugador_id).filter(Boolean))];
+  const juegosPorJugador: Record<string, string> = {};
+
+  if (jugadorIds.length > 0) {
+    const { data: partidas } = await SupabaseClient
+      .from("partidas")
+      .select("jugador_id, juego, created_at")
+      .in("jugador_id", jugadorIds)
+      .order("created_at", { ascending: false });
+
+    (partidas ?? []).forEach((p: any) => {
+      if (!juegosPorJugador[p.jugador_id]) {
+        juegosPorJugador[p.jugador_id] = mapJuegoNombre(p.juego);
+      }
+    });
+  }
+
   const now = new Date();
   const cupones = (data ?? []).map((c: any) => {
-    let estado: "Canjeado" | "Pendiente" | "Expirado";
-    if (c.canjeado) {
-      estado = "Canjeado";
-    } else if (new Date(c.expires_at) < now) {
-      estado = "Expirado";
-    } else {
-      estado = "Pendiente";
-    }
-
-    const hora = c.canjeado_at
-      ? new Date(c.canjeado_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })
-      : new Date(c.expires_at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+    const estado = calcularEstado(c.canjeado, c.expires_at);
 
     return {
       codigo: c.codigo,
       jugador: c.jugadores?.nombre ?? "Desconocido",
-      hora,
+      hora: formatFecha(c.created_at),
       nivel: c.nivel,
-      juego: "-",  
+      juego: juegosPorJugador[c.jugador_id] ?? "-",
       estado,
+      created_at: c.created_at,
+      expires_at: c.expires_at,
+      canjeado_at: c.canjeado_at,
     };
   });
 
-  return { success: true, data: cupones };
+  const stats = {
+    totalGenerados: cupones.length,
+    canjeados: cupones.filter((c) => c.estado === "Canjeado").length,
+    pendientes: cupones.filter((c) => c.estado === "Pendiente").length,
+    expirados: cupones.filter((c) => c.estado === "Expirado").length,
+  };
+
+  return { success: true, data: { cupones, stats } };
 };
 
 export default { generateCoupon, validateCoupon, redeemCoupon, redeemCouponPlayer, listCoupons };
