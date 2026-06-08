@@ -130,3 +130,28 @@
   border-radius: 999px;
   transition: width 0.2s ease;
 }
+
+
+.shake-intensity__pct {
+  font-weight: 800;
+  font-size: 0.75rem;
+  transition: color 0.2s ease;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.shake-intensity__label {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.03em;
+  min-height: 1.1rem;
+  transition: opacity 0.2s ease;
+}
+
+
+.shake-intensity__fill {
+  transition: none;
+}

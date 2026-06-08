@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import MallHeader from '../../components/MallHeader';
@@ -12,106 +12,112 @@ interface JugadorScore {
 interface BoardDot {
   id: string;
   color: string;
-  x: number;
+  x: number; 
   y: number; 
 }
 
-
-const DOT_RADIUS_PCT = 2.6;
-const MAX_ATTEMPTS   = 120;
-const MARGIN         = DOT_RADIUS_PCT + 0.5;
-
+const DOT_DIAMETER_PX = 22          
+const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
+const MIN_DIST_PX     = DOT_DIAMETER_PX + 1  
+const MAX_ATTEMPTS    = 150         
 
 function findFreePosition(
   existing: BoardDot[],
+  boardW: number,
+  boardH: number,
 ): { x: number; y: number } | null {
-  const minDist = DOT_RADIUS_PCT * 2; 
+  const margin = DOT_RADIUS_PX + 1
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const x = MARGIN + Math.random() * (100 - MARGIN * 2);
-    const y = MARGIN + Math.random() * (100 - MARGIN * 2);
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const x = margin + Math.random() * (boardW - margin * 2)
+    const y = margin + Math.random() * (boardH - margin * 2)
 
-    
     const overlaps = existing.some((d) => {
-      const dx = d.x - x;
-      const dy = d.y - y;
-      const dist = Math.sqrt(dx * dx + (dy * dy * 4));
-      return dist < minDist;
-    });
+      const dx = d.x - x
+      const dy = d.y - y
+      return Math.sqrt(dx * dx + dy * dy) < MIN_DIST_PX
+    })
 
-    if (!overlaps) return { x, y };
+    if (!overlaps) return { x, y }
   }
 
-  return null;
+  return null 
 }
 
 export default function ShakeLivePage() {
-  const socket   = useSocket();
-  const navigate = useNavigate();
+  const socket   = useSocket()
+  const navigate = useNavigate()
 
-  const [scores,    setScores]    = useState<Record<string, JugadorScore>>({});
-  const [dots,      setDots]      = useState<BoardDot[]>([]);
-  const [countdown, setCountdown] = useState<number | null>(null);
+  const [scores,    setScores]    = useState<Record<string, JugadorScore>>({})
+  const [dots,      setDots]      = useState<BoardDot[]>([])
+  const [countdown, setCountdown] = useState<number | null>(null)
 
-  const totalPuntosRef   = useRef<Record<string, number>>({});
-  const playerColorsRef  = useRef<Record<string, string>>({});
-  const rankingRef       = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([]);
-  const dotsRef = useRef<BoardDot[]>([]);
-  useEffect(() => { dotsRef.current = dots; }, [dots]);
+  const totalPuntosRef  = useRef<Record<string, number>>({})
+  const playerColorsRef = useRef<Record<string, string>>({})
+  const rankingRef      = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([])
+  const dotsRef         = useRef<BoardDot[]>([])          
+  const boardRef        = useRef<HTMLDivElement>(null)     
 
-  const resetBoard = (full = false) => {
-    setDots([]);
-    dotsRef.current = [];
-    totalPuntosRef.current = {};
-    rankingRef.current = [];
+  
+  useEffect(() => { dotsRef.current = dots }, [dots])
+
+  const resetBoard = useCallback((full = false) => {
+    setDots([])
+    dotsRef.current = []
+    totalPuntosRef.current = {}
+    rankingRef.current = []
     if (full) {
-      setScores({});
-      playerColorsRef.current = {};
+      setScores({})
+      playerColorsRef.current = {}
     } else {
       setScores(prev => {
-        const next: Record<string, JugadorScore> = {};
+        const next: Record<string, JugadorScore> = {}
         Object.entries(prev).forEach(([id, j]) => {
-          next[id] = { ...j, puntos: 0 };
-        });
-        return next;
-      });
+          next[id] = { ...j, puntos: 0 }
+        })
+        return next
+      })
     }
-  };
+  }, [])
 
   useEffect(() => {
     const emitJoin = () => {
       socket.emit('join-sala', {
         salaId: 'sala-001',
         jugador: { id: 'mall-screen', nombre: 'Mall' },
-      });
-    };
-    if (socket.connected) emitJoin();
-    else socket.on('connect', emitJoin);
+      })
+    }
+    if (socket.connected) emitJoin()
+    else socket.on('connect', emitJoin)
 
     socket.on('players-update', (jugadores: any[]) => {
       setScores(prev => {
-        const next: Record<string, JugadorScore> = {};
+        const next: Record<string, JugadorScore> = {}
         jugadores.forEach(j => {
-          if (j.id === 'mall-screen') return;
-          playerColorsRef.current[j.id] = j.color || '#888';
+          if (j.id === 'mall-screen') return
+          playerColorsRef.current[j.id] = j.color || '#888'
           next[j.id] = {
             nombre: j.nombre || 'Jugador',
             color:  j.color  || '#888',
             puntos: prev[j.id]?.puntos ?? totalPuntosRef.current[j.id] ?? 0,
-          };
-        });
-        return next;
-      });
-    });
+          }
+        })
+        return next
+      })
+    })
 
     socket.on('score-update', ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
       totalPuntosRef.current[jugadorId] =
-        (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza);
+        (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza)
 
-      const color = playerColorsRef.current[jugadorId] ?? '#888';
+      const color = playerColorsRef.current[jugadorId] ?? '#888'
 
       
-      const pos = findFreePosition(dotsRef.current);
+      const board = boardRef.current
+      const boardW = board?.clientWidth  ?? 800
+      const boardH = board?.clientHeight ?? 300
+
+      const pos = findFreePosition(dotsRef.current, boardW, boardH)
 
       if (pos) {
         const newDot: BoardDot = {
@@ -119,62 +125,62 @@ export default function ShakeLivePage() {
           color,
           x: pos.x,
           y: pos.y,
-        };
+        }
         setDots(prev => {
-          const next = [...prev, newDot];
-          dotsRef.current = next;
-          return next;
-        });
+          const next = [...prev, newDot]
+          dotsRef.current = next
+          return next
+        })
       }
       
 
       setScores(prev => {
-        if (!prev[jugadorId]) return prev;
+        if (!prev[jugadorId]) return prev
         return {
           ...prev,
           [jugadorId]: {
             ...prev[jugadorId],
             puntos: totalPuntosRef.current[jugadorId],
           },
-        };
-      });
-    });
+        }
+      })
+    })
 
-    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count));
+    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
 
     socket.on('game-start', () => {
-      resetBoard(false);
-      setCountdown(null);
-    });
+      resetBoard(false)
+      setCountdown(null)
+    })
 
     socket.on('player-finished', () => {
       setTimeout(
         () => navigate('/mall/results', { state: { ranking: rankingRef.current } }),
         4000,
-      );
-    });
+      )
+    })
 
     socket.on('ranking-partida', (ranking: any[]) => {
-      if (ranking.length === 0) resetBoard(true);
-      else rankingRef.current = ranking;
-    });
+      if (ranking.length === 0) resetBoard(true)
+      else rankingRef.current = ranking
+    })
 
     return () => {
-      socket.off('connect', emitJoin);
-      socket.off('players-update');
-      socket.off('score-update');
-      socket.off('countdown');
-      socket.off('game-start');
-      socket.off('player-finished');
-      socket.off('ranking-partida');
-    };
-  }, [socket, navigate]);
+      socket.off('connect', emitJoin)
+      socket.off('players-update')
+      socket.off('score-update')
+      socket.off('countdown')
+      socket.off('game-start')
+      socket.off('player-finished')
+      socket.off('ranking-partida')
+    }
+  }, [socket, navigate, resetBoard])
 
   const ordenados = Object.entries(scores)
     .filter(([id]) => id !== 'mall-screen')
-    .sort(([, a], [, b]) => b.puntos - a.puntos);
+    .sort(([, a], [, b]) => b.puntos - a.puntos)
 
-  const getMedal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? '';
+  const getMedal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? ''
 
   return (
     <div className="mall-screen mall-shake">
@@ -207,16 +213,17 @@ export default function ShakeLivePage() {
           ))}
         </aside>
 
-        
+       
         <div style={{ flex: 1 }}>
-          <div className="mall-board" aria-hidden>
+          
+          <div className="mall-board" ref={boardRef} aria-hidden>
             {dots.map((dot) => (
               <span
                 key={dot.id}
                 className="mall-board__dot mall-board__dot--filled"
                 style={{
-                  left:       `${dot.x}%`,
-                  top:        `${dot.y}%`,
+                  left:       `${dot.x}px`,
+                  top:        `${dot.y}px`,
                   background: dot.color,
                 }}
               />
@@ -247,7 +254,7 @@ export default function ShakeLivePage() {
         
         <aside>
           {ordenados[0] && (() => {
-            const [id, j] = ordenados[0];
+            const [id, j] = ordenados[0]
             return (
               <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -257,10 +264,10 @@ export default function ShakeLivePage() {
                 <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
                 <p className="mall-leader-card__rank">🥇 1er lugar</p>
               </div>
-            );
+            )
           })()}
         </aside>
       </div>
     </div>
-  );
+  )
 }
