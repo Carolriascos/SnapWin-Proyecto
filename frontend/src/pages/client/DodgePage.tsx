@@ -109,7 +109,7 @@ export default function DodgePage() {
           sensorActiveRef.current = status === 'active'
         },
       },
-      { laneCount: LANES },
+      { laneCount: LANES, initialLane: carrilRef.current },
     )
     sensorRef.current = sensor
     await sensor.start()

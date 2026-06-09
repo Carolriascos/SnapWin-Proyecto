@@ -9,18 +9,27 @@ interface JugadorScore {
   puntos: number;
 }
 
-const DOT_DIAMETER_PX = 18
-const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
-const MIN_DIST_PX     = DOT_DIAMETER_PX + 1
-const MAX_ATTEMPTS    = 10
+const DOT_SIZE_PX        = 24
+const DOT_RADIUS_PX      = DOT_SIZE_PX / 2
+const MIN_DIST_PX        = DOT_SIZE_PX + 4
 const MAX_DOTS_PER_EVENT = 5
 const MAX_BOARD_DOTS     = 400
 
 interface BoardDot {
   id: string
   color: string
-  x: number   
-  y: number   
+  x: number
+  y: number
+}
+
+function getOccupiedCells(dots: BoardDot[], margin: number, cellSize: number): Set<string> {
+  const occupied = new Set<string>()
+  for (const d of dots) {
+    const col = Math.floor((d.x - margin) / cellSize)
+    const row = Math.floor((d.y - margin) / cellSize)
+    occupied.add(`${col},${row}`)
+  }
+  return occupied
 }
 
 function findFreePosition(
@@ -28,31 +37,30 @@ function findFreePosition(
   boardW: number,
   boardH: number,
 ): { x: number; y: number } | null {
-  const margin = DOT_RADIUS_PX + 2
-  
-  const currentCount = existing.length
-  const maxTries = currentCount > 300 ? 3 : MAX_ATTEMPTS
+  const margin = DOT_RADIUS_PX + 4
+  const cellSize = MIN_DIST_PX
+  const cols = Math.floor((boardW - margin * 2) / cellSize)
+  const rows = Math.floor((boardH - margin * 2) / cellSize)
 
-  for (let i = 0; i < maxTries; i++) {
-    const x = margin + Math.random() * (boardW - margin * 2)
-    const y = margin + Math.random() * (boardH - margin * 2)
-    
-    
-    const searchArea = currentCount > 100 ? existing.slice(-100) : existing
-    
-    const overlaps = searchArea.some(d => {
-      const dx = d.x - x
-      const dy = d.y - y
-      return (dx * dx + dy * dy) < (MIN_DIST_PX * MIN_DIST_PX)
-    })
-    
-    if (!overlaps) return { x, y }
+  if (cols < 1 || rows < 1) return null
+
+  const occupied = getOccupiedCells(existing, margin, cellSize)
+  const freeCells: { col: number; row: number }[] = []
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (!occupied.has(`${col},${row}`)) {
+        freeCells.push({ col, row })
+      }
+    }
   }
-  
-  
-  return { 
-    x: margin + Math.random() * (boardW - margin * 2), 
-    y: margin + Math.random() * (boardH - margin * 2) 
+
+  if (freeCells.length === 0) return null
+
+  const pick = freeCells[Math.floor(Math.random() * freeCells.length)]
+  return {
+    x: margin + pick.col * cellSize + cellSize / 2,
+    y: margin + pick.row * cellSize + cellSize / 2,
   }
 }
 
@@ -115,7 +123,7 @@ export default function ShakeLivePage() {
       const next = [...prev]
       for (let i = 0; i < amount; i++) {
         const pos = findFreePosition(next, boardW, boardH)
-        if (!pos) break
+        if (!pos) continue
         next.push({
           id: `${color}-${Date.now()}-${Math.random()}-${i}`,
           color,
