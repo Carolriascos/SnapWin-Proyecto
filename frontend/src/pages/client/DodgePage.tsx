@@ -7,6 +7,7 @@ import {
   createTiltSensor,
   getSensorCapabilities,
   getSensorStatusMessage,
+  isMobileDevice,
   type SensorStatus,
 } from '../../utils/tiltSensor'
 import { rejoinOnResume } from '../../utils/sessionRejoin'
@@ -46,8 +47,9 @@ export default function DodgePage() {
   const [vidas,        setVidas]        = useState(3)
   const [puntos,       setPuntos]       = useState(0)
   const [parpadeo,     setParpadeo]     = useState(false)
+  const needsTapToStart = sensorCaps.requiresUserGesture || isMobileDevice()
   const [sensorStatus, setSensorStatus] = useState<SensorStatus>(
-    sensorCaps.requiresUserGesture ? 'pending_permission' : 'idle',
+    needsTapToStart ? 'pending_permission' : 'idle',
   )
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
@@ -117,9 +119,9 @@ export default function DodgePage() {
   }, [setCarrilSeguro])
 
   useEffect(() => {
-    if (!sensorCaps.requiresUserGesture) startSensors()
+    if (!needsTapToStart) startSensors()
     return () => sensorRef.current?.stop()
-  }, [startSensors])
+  }, [startSensors, needsTapToStart])
 
   useEffect(() => {
     const spawn = setInterval(() => {
@@ -184,7 +186,7 @@ export default function DodgePage() {
         const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
         setSegundos(restante)
         emitSync()
-        if (sensorActiveRef.current || !sensorCaps.requiresUserGesture) {
+        if (sensorActiveRef.current || !needsTapToStart) {
           startSensors()
         }
       }
@@ -247,7 +249,12 @@ export default function DodgePage() {
           </div>
         </div>
 
-        <div id="dodge-arena-touch" className="dodge-arena dodge-arena--play">
+        <div
+          id="dodge-arena-touch"
+          className="dodge-arena dodge-arena--play"
+          onClick={() => { if (sensorStatus === 'pending_permission') startSensors() }}
+          role="presentation"
+        >
           <div className="dodge-arena__lanes" aria-hidden>
             {Array.from({ length: LANES }, (_, i) => (
               <span key={i} className={i === carril ? 'dodge-lane--active' : ''} />

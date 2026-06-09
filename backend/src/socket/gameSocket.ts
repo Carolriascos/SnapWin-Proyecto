@@ -47,6 +47,15 @@ export const setupSocket = (io: Server) => {
       color: j.color ?? "#7c3aed",
     }));
 
+  const syncMallShakeState = (socket: Socket, salaId: string) => {
+    const game = salaGameMode.get(salaId);
+    if (!salaCountdownStarted.get(salaId) || game !== "shake") return;
+
+    const roster = getRosterPayload(salaId);
+    socket.emit("game-start", { salaId, game: "shake", jugadores: roster, timestamp: Date.now() });
+    socket.emit("countdown", { count: 0 });
+  };
+
   const syncMallDodgeState = (socket: Socket, salaId: string) => {
     const game = salaGameMode.get(salaId);
     if (!salaCountdownStarted.get(salaId) || game !== "dodge") return;
@@ -234,7 +243,10 @@ export const setupSocket = (io: Server) => {
 
       salas.set(salaId, jugadoresEnSala);
       emitPlayersUpdate(salaId);
-      if (jugador?.id === "mall-screen") syncMallDodgeState(socket, salaId);
+      if (jugador?.id === "mall-screen") {
+        syncMallDodgeState(socket, salaId);
+        syncMallShakeState(socket, salaId);
+      }
       if (!isSistema(jugador?.id) && (previo?.estado === "espera" || !previo)) {
         tryStartLobby(salaId);
       }
@@ -244,7 +256,16 @@ export const setupSocket = (io: Server) => {
       const puntajes = salaPuntajes.get(data.salaId) ?? {};
       puntajes[data.jugadorId] = (puntajes[data.jugadorId] ?? 0) + Math.round(data.fuerza);
       salaPuntajes.set(data.salaId, puntajes);
-      io.to(data.salaId).emit("score-update", { jugadorId: data.jugadorId, fuerza: data.fuerza, timestamp: Date.now() });
+
+      const jugadores = salas.get(data.salaId) ?? [];
+      const jugador = jugadores.find((j) => j.id === data.jugadorId);
+      io.to(data.salaId).emit("score-update", {
+        jugadorId: data.jugadorId,
+        fuerza: data.fuerza,
+        timestamp: Date.now(),
+        color: jugador?.color ?? "#7c3aed",
+        nombre: jugador?.nombre ?? "Jugador",
+      });
     });
 
     socket.on("dodge-data", (data: { salaId: string; jugadorId: string; angulo?: number; posicion?: number; carril?: number }) => {

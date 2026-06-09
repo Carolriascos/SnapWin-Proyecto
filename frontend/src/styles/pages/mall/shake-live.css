@@ -99,7 +99,8 @@
 }
 
 .mall-board__dot--filled {
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+  background-color: var(--dot-color, #7c3aed) !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--dot-color, #7c3aed) 60%, transparent);
   animation: dot-pop 0.25s ease;
 }
 

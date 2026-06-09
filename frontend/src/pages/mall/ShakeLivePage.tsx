@@ -57,9 +57,11 @@ export default function ShakeLivePage() {
 
   const totalPuntosRef  = useRef<Record<string, number>>({})
   const playerColorsRef = useRef<Record<string, string>>({})
+  const playerNamesRef  = useRef<Record<string, string>>({})
   const rankingRef      = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([])
   const dotsRef         = useRef<BoardDot[]>([])          
-  const boardRef        = useRef<HTMLDivElement>(null)     
+  const boardRef        = useRef<HTMLDivElement>(null)
+  const inGameRef       = useRef(false)
 
   
   useEffect(() => { dotsRef.current = dots }, [dots])
@@ -72,6 +74,7 @@ export default function ShakeLivePage() {
     if (full) {
       setScores({})
       playerColorsRef.current = {}
+      playerNamesRef.current = {}
     } else {
       setScores(prev => {
         const next: Record<string, JugadorScore> = {}
@@ -90,27 +93,37 @@ export default function ShakeLivePage() {
 
     const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
 
-    socket.on('players-update', (jugadores: any[]) => {
-      setScores(prev => {
-        const next: Record<string, JugadorScore> = {}
-        jugadores.forEach(j => {
-          if (j.id === 'mall-screen') return
-          playerColorsRef.current[j.id] = j.color || '#888'
-          next[j.id] = {
-            nombre: j.nombre || 'Jugador',
-            color:  j.color  || '#888',
-            puntos: prev[j.id]?.puntos ?? totalPuntosRef.current[j.id] ?? 0,
-          }
-        })
-        return next
+    const applyRoster = (jugadores: { id: string; nombre?: string; color?: string }[]) => {
+      const next: Record<string, JugadorScore> = {}
+      jugadores.forEach(j => {
+        if (j.id === 'mall-screen' || j.id === 'admin-panel') return
+        const color = j.color || '#7c3aed'
+        playerColorsRef.current[j.id] = color
+        playerNamesRef.current[j.id] = j.nombre || 'Jugador'
+        next[j.id] = {
+          nombre: j.nombre || 'Jugador',
+          color,
+          puntos: totalPuntosRef.current[j.id] ?? 0,
+        }
       })
+      setScores(next)
+    }
+
+    socket.on('players-update', (jugadores: any[]) => {
+      if (inGameRef.current) return
+      applyRoster(jugadores)
     })
 
-    socket.on('score-update', ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
+    socket.on('score-update', ({ jugadorId, fuerza, color, nombre }: {
+      jugadorId: string; fuerza: number; color?: string; nombre?: string
+    }) => {
+      if (color) playerColorsRef.current[jugadorId] = color
+      if (nombre) playerNamesRef.current[jugadorId] = nombre
+
       totalPuntosRef.current[jugadorId] =
         (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza)
 
-      const color = playerColorsRef.current[jugadorId] ?? '#888'
+      const dotColor = playerColorsRef.current[jugadorId] ?? color ?? '#7c3aed'
 
       
       const board = boardRef.current
@@ -122,7 +135,7 @@ export default function ShakeLivePage() {
       if (pos) {
         const newDot: BoardDot = {
           id:    `${jugadorId}-${Date.now()}-${Math.random()}`,
-          color,
+          color: dotColor,
           x: pos.x,
           y: pos.y,
         }
@@ -135,11 +148,17 @@ export default function ShakeLivePage() {
       
 
       setScores(prev => {
-        if (!prev[jugadorId]) return prev
+        const existing = prev[jugadorId]
+        const entry: JugadorScore = existing ?? {
+          nombre: playerNamesRef.current[jugadorId] ?? nombre ?? 'Jugador',
+          color: dotColor,
+          puntos: 0,
+        }
         return {
           ...prev,
           [jugadorId]: {
-            ...prev[jugadorId],
+            ...entry,
+            color: dotColor,
             puntos: totalPuntosRef.current[jugadorId],
           },
         }
@@ -148,9 +167,14 @@ export default function ShakeLivePage() {
 
     socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
 
-    socket.on('game-start', () => {
+    socket.on('game-start', ({ game, jugadores }: {
+      game?: string; jugadores?: { id: string; nombre?: string; color?: string }[]
+    }) => {
+      if (game && game !== 'shake') return
+      inGameRef.current = true
       resetBoard(false)
       setCountdown(null)
+      if (jugadores && jugadores.length > 0) applyRoster(jugadores)
     })
 
     socket.on('player-finished', () => {
@@ -161,11 +185,16 @@ export default function ShakeLivePage() {
     })
 
     socket.on('ranking-partida', (ranking: any[]) => {
-      if (ranking.length === 0) resetBoard(true)
-      else rankingRef.current = ranking
+      if (ranking.length === 0) {
+        inGameRef.current = false
+        resetBoard(true)
+      } else {
+        rankingRef.current = ranking
+      }
     })
 
     socket.on('round-reset', () => {
+      inGameRef.current = false
       resetBoard(true)
       setCountdown(null)
       navigate('/mall/waiting')
@@ -230,9 +259,10 @@ export default function ShakeLivePage() {
                 key={dot.id}
                 className="mall-board__dot mall-board__dot--filled"
                 style={{
-                  left:       `${dot.x}px`,
-                  top:        `${dot.y}px`,
-                  background: dot.color,
+                  left:            `${dot.x}px`,
+                  top:             `${dot.y}px`,
+                  background:      dot.color,
+                  ['--dot-color' as string]: dot.color,
                 }}
               />
             ))}
