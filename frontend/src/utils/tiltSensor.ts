@@ -35,6 +35,7 @@ const SMOOTHING_ALPHA    = 0.86
 const CALIBRATION_COUNT  = 8
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
+const BASE_HORIZONTAL_SIGN = -1
 
 type PermissionCtor = { requestPermission?: () => Promise<PermissionState | string> }
 
@@ -255,7 +256,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         checkOrientUseless()
         if (orientDisabled) return
         lastOrientAt = Date.now()
-        processTiltSample(tilt)
+        processTiltSample(tilt * BASE_HORIZONTAL_SIGN)
       }
       window.addEventListener('deviceorientation', orientHandler, { passive: true })
     }
@@ -273,7 +274,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
           signAccCount += 1
           if (signAccCount >= 12) orientSign = signAcc < 0 ? -1 : 1
         }
-        processTiltSample(tilt)
+        processTiltSample(tilt * BASE_HORIZONTAL_SIGN)
       }
       window.addEventListener('devicemotion', motionHandler, { passive: true })
     }
