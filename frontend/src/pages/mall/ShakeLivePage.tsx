@@ -9,12 +9,12 @@ interface JugadorScore {
   puntos: number;
 }
 
-const DOT_DIAMETER_PX = 22
+const DOT_DIAMETER_PX = 18
 const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
-const MIN_DIST_PX     = DOT_DIAMETER_PX + 2
-const MAX_ATTEMPTS    = 150
-const MAX_DOTS_PER_EVENT = 10
-const MAX_BOARD_DOTS     = 700
+const MIN_DIST_PX     = DOT_DIAMETER_PX + 1
+const MAX_ATTEMPTS    = 10
+const MAX_DOTS_PER_EVENT = 5
+const MAX_BOARD_DOTS     = 400
 
 interface BoardDot {
   id: string
@@ -28,29 +28,55 @@ function findFreePosition(
   boardW: number,
   boardH: number,
 ): { x: number; y: number } | null {
-  const margin = DOT_RADIUS_PX + 1
-  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+  const margin = DOT_RADIUS_PX + 2
+  
+  const currentCount = existing.length
+  const maxTries = currentCount > 300 ? 3 : MAX_ATTEMPTS
+
+  for (let i = 0; i < maxTries; i++) {
     const x = margin + Math.random() * (boardW - margin * 2)
     const y = margin + Math.random() * (boardH - margin * 2)
-    const overlaps = existing.some(d => {
+    
+    
+    const searchArea = currentCount > 100 ? existing.slice(-100) : existing
+    
+    const overlaps = searchArea.some(d => {
       const dx = d.x - x
       const dy = d.y - y
-      return Math.sqrt(dx * dx + dy * dy) < MIN_DIST_PX
+      return (dx * dx + dy * dy) < (MIN_DIST_PX * MIN_DIST_PX)
     })
+    
     if (!overlaps) return { x, y }
   }
-  return null
+  
+  
+  return { 
+    x: margin + Math.random() * (boardW - margin * 2), 
+    y: margin + Math.random() * (boardH - margin * 2) 
+  }
 }
 
 function dotsForForce(fuerza: number): number {
   return Math.max(1, Math.min(MAX_DOTS_PER_EVENT, Math.round(Math.abs(fuerza) / 6)))
 }
 
-function colorFromId(id: string): string {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  const hue = h % 360
-  return `hsl(${hue}, 82%, 58%)`
+const PLAYER_COLORS = [
+  "#FF3366", 
+  "#33FF99", 
+  "#3366FF", 
+  "#FFCC33", 
+  "#9933FF", 
+  "#FF9933", 
+  "#33FFFF", 
+  "#FF5050", 
+  "#66FF33", 
+  "#CC33FF", 
+  "#00CCFF", 
+  "#FF99CC" 
+]
+
+function getPlayerColor(index: number): string {
+  return PLAYER_COLORS[index % PLAYER_COLORS.length]
 }
 
 export default function ShakeLivePage() {
@@ -116,11 +142,11 @@ export default function ShakeLivePage() {
     socket.on("players-update", (jugadores: any[]) => {
       setScores(prev => {
         const next: Record<string, JugadorScore> = {}
-        jugadores.forEach(j => {
+        jugadores.forEach((j, index) => {
           if (j.id === 'mall-screen' || j.id === 'admin-panel') return
           next[j.id] = {
             nombre: j.nombre || "Jugador",
-            color:  j.color  || prev[j.id]?.color || colorFromId(String(j.id ?? '')),
+            color:  getPlayerColor(index),
             puntos: prev[j.id]?.puntos ?? 0,
           }
         })
@@ -130,7 +156,7 @@ export default function ShakeLivePage() {
     })
 
     socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
-      const color = scoresRef.current[jugadorId]?.color || colorFromId(jugadorId)
+      const color = scoresRef.current[jugadorId]?.color || "#ffffff"
       setScores(prev => {
         if (!prev[jugadorId]) return prev
         const nuevoPuntaje = (prev[jugadorId].puntos ?? 0) + Math.round(fuerza)

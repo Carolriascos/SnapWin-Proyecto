@@ -28,14 +28,14 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG      = 1.4
-const LANE_THRESHOLD_DEG = 2.4
-const COOLDOWN_MS        = 70
-const SMOOTHING_ALPHA    = 0.86
-const CALIBRATION_COUNT  = 8
+const DEAD_ZONE_DEG      = 1.2
+const LANE_THRESHOLD_DEG = 1.8
+const COOLDOWN_MS        = 50
+const SMOOTHING_ALPHA    = 0.7
+const CALIBRATION_COUNT  = 5
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
-const BASE_HORIZONTAL_SIGN = -1
+const BASE_HORIZONTAL_SIGN = 1
 
 type PermissionCtor = { requestPermission?: () => Promise<PermissionState | string> }
 
@@ -108,11 +108,19 @@ function normalizeOrientationTilt(e: DeviceOrientationEvent, orientSign: number)
 
   const angle = screenAngle()
   let tilt = 0
-  if (angle === 0) tilt = e.gamma
-  else if (angle === 180) tilt = -e.gamma
-  else if (angle === 90) tilt = e.beta
-  else if (angle === 270 || angle === -90) tilt = -e.beta
-  else tilt = e.gamma
+  
+  
+  if (angle === 0) {
+    tilt = e.gamma
+  } else if (angle === 180) {
+    tilt = -e.gamma
+  } else if (angle === 90) {
+    tilt = e.beta
+  } else if (angle === 270 || angle === -90) {
+    tilt = -e.beta
+  } else {
+    tilt = e.gamma
+  }
 
   return tilt * orientSign
 }
