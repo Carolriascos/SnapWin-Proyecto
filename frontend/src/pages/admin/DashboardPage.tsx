@@ -44,7 +44,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     cargarStats();
-    const iv = setInterval(cargarStats, 15_000); // cada 15s
+    const iv = setInterval(cargarStats, 15_000); 
     return () => clearInterval(iv);
   }, [cargarStats]);
 
@@ -63,6 +63,7 @@ export default function DashboardPage() {
 
     socket.on("player-finished", () => {
       setTimeout(cargarStats, 1000);
+      setRondaActiva(false);
     });
 
     socket.on("partida-finalizada", () => {
@@ -70,26 +71,18 @@ export default function DashboardPage() {
       setTimeout(cargarStats, 1000);
     });
 
-    socket.on("cupon-actualizado", () => {
-      cargarStats();
-    });
-
-    socket.on("game-start", () => {
-      setRondaActiva(true);
-    });
-
     return () => {
       socket.off("connect", emitJoin);
       socket.off("stats-dia");
       socket.off("player-finished");
       socket.off("partida-finalizada");
-      socket.off("cupon-actualizado");
-      socket.off("game-start");
     };
   }, [socket, cargarStats]);
 
   const iniciarRonda = () => {
     socket.emit("admin-start-round", { salaId: SALA_ID });
+    setRondaActiva(true);
+    setTimeout(() => setRondaActiva(false), 5 * 60 * 1000);
   };
 
   const s = stats;
@@ -183,7 +176,7 @@ export default function DashboardPage() {
                 className={`dash-btn-round ${rondaActiva ? "dash-btn-round--active" : ""}`}
                 onClick={iniciarRonda}
                 disabled={rondaActiva}
-                title="Durante la espera de 30s, salta el temporizador. Sin click, los jugadores esperan los 30s completos."
+                title="Si hay >=2 jugadores arranca inmediato. Si no, espera que lleguen."
               >
                 {rondaActiva ? "Ronda en curso…" : "Iniciar ronda"}
               </button>

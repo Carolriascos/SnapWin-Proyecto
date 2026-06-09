@@ -1,17 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import { Jugador } from '../../types'
 import SnapHeader from '../../components/SnapHeader'
 import { getGameMode, getGameLabel, hasGameMode } from '../../utils/gameMode'
-import { rejoinOnResume } from '../../utils/sessionRejoin'
 
 export default function WaitingPage() {
   const navigate  = useNavigate()
   const socket    = useSocket()
   const [jugadores, setJugadores] = useState<Jugador[]>([])
   const [countdown, setCountdown] = useState<number | null>(null)
-  const joinDataRef = useRef<{ salaId: string; jugador: any } | null>(null)
 
   useEffect(() => {
     if (!hasGameMode()) { navigate('/'); return }
@@ -21,16 +19,24 @@ export default function WaitingPage() {
     const color     = localStorage.getItem('color')     ?? '#7c3aed'
     const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
 
-    const joinData = { salaId, jugador: { id: jugadorId, nombre, color, gameMode: getGameMode() } }
-    joinDataRef.current = joinData
-
-    const emitJoin = () => socket.emit('join-sala', joinData)
+    const emitJoin = () => {
+      socket.emit('join-sala', {
+        salaId,
+        jugador: { id: jugadorId, nombre, color, gameMode: getGameMode() },
+      })
+    }
 
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
 
     socket.on('players-update', (data: any) => {
-      setJugadores(data)
+      const soloJugadores = data.filter((j: any) =>
+        j.id !== 'mall-screen' &&
+        j.id !== 'admin-panel' &&
+        j.nombre !== 'Mall' &&
+        j.nombre !== 'Admin'
+      )
+      setJugadores(soloJugadores)
     })
 
     socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
@@ -45,15 +51,12 @@ export default function WaitingPage() {
       setCountdown(null)
     })
 
-    const cleanupRejoin = rejoinOnResume(socket, joinData)
-
     return () => {
       socket.off('connect', emitJoin)
       socket.off('players-update')
       socket.off('countdown')
       socket.off('game-start')
       socket.off('round-reset')
-      cleanupRejoin?.()
     }
   }, [socket, navigate])
 

@@ -12,7 +12,6 @@ interface Cupon {
   nivel: string;
   juego: string;
   estado: "Canjeado" | "Pendiente" | "Expirado";
-  created_at?: string;
 }
 
 interface InfoCupon {
@@ -52,29 +51,19 @@ export default function ValidatePage() {
     try {
       const token = localStorage.getItem("adminToken") ?? "";
       const res  = await fetch(`${BACKEND}/coupons/list`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
 
-      if (data.success) {
-        const lista: Cupon[] = Array.isArray(data.data)
-          ? data.data
-          : (data.data?.cupones ?? []);
-
-        const statsData = data.data?.stats;
-
+      if (data.success && Array.isArray(data.data)) {
+        const lista: Cupon[] = data.data;
         setCupones(lista);
-
-        if (statsData) {
-          setStats(statsData);
-        } else {
-          setStats({
-            totalGenerados: lista.length,
-            canjeados:  lista.filter(c => c.estado === "Canjeado").length,
-            pendientes: lista.filter(c => c.estado === "Pendiente").length,
-            expirados:  lista.filter(c => c.estado === "Expirado").length,
-          });
-        }
+        setStats({
+          totalGenerados: lista.length,
+          canjeados:  lista.filter((c) => c.estado === "Canjeado").length,
+          pendientes: lista.filter((c) => c.estado === "Pendiente").length,
+          expirados:  lista.filter((c) => c.estado === "Expirado").length,
+        });
       }
     } catch (e) {
       console.error("Error cargando cupones:", e);
@@ -85,12 +74,13 @@ export default function ValidatePage() {
 
   useEffect(() => {
     cargarCupones();
-    const iv = setInterval(cargarCupones, 10_000);
-    return () => clearInterval(iv);
+    const intervalo = setInterval(cargarCupones, 10_000); 
+    return () => clearInterval(intervalo);
   }, [cargarCupones]);
 
+  // Actualización en tiempo real por socket
   useEffect(() => {
-    const actualizar = () => setTimeout(cargarCupones, 600);
+    const actualizar = () => setTimeout(cargarCupones, 500);
     socket.on("partida-finalizada", actualizar);
     socket.on("player-finished",    actualizar);
     socket.on("cupon-actualizado",  actualizar);
@@ -101,7 +91,12 @@ export default function ValidatePage() {
     };
   }, [socket, cargarCupones]);
 
-  const resetear = () => { setCodigo(""); setResultado(null); setInfoCupon(null); setModalOpen(false); };
+  const resetear = () => {
+    setCodigo("");
+    setResultado(null);
+    setInfoCupon(null);
+    setModalOpen(false);
+  };
 
   const validar = async () => {
     if (!codigo.trim()) return;
@@ -110,34 +105,52 @@ export default function ValidatePage() {
     setInfoCupon(null);
     const upper = codigo.trim().toUpperCase();
     const token = localStorage.getItem("adminToken") ?? "";
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
 
     try {
-      const res  = await fetch(`${BACKEND}/coupons/validate/${upper}`, { headers });
+      const res  = await fetch(`${BACKEND}/coupons/validate/${upper}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
 
-      if (!data.success) { setResultado("Error del servidor"); setColorRes("red"); return; }
+      if (!data.success) {
+        setResultado("Error del servidor");
+        setColorRes("red");
+        return;
+      }
 
       const { valido, motivo, coupon } = data.data;
 
-      if (!valido) { setResultado(`NO VÁLIDO: ${motivo}`); setColorRes("red"); return; }
+      if (!valido) {
+        setResultado(`NO VÁLIDO: ${motivo}`);
+        setColorRes("red");
+        return;
+      }
 
-      const redeem = await fetch(`${BACKEND}/coupons/redeem/${upper}`, { method: "PATCH", headers });
-      const rd     = await redeem.json();
+      const redeem = await fetch(`${BACKEND}/coupons/redeem/${upper}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const rd = await redeem.json();
 
       if (rd.success) {
         setResultado("CANJEADO EXITOSAMENTE ✅");
         setColorRes("green");
-        setInfoCupon({ nivel: coupon.nivel, descuento: coupon.descuento, canjeado: true, expires_at: coupon.expires_at });
+        setInfoCupon({
+          nivel:      coupon.nivel,
+          descuento:  coupon.descuento,
+          canjeado:   true,
+          expires_at: coupon.expires_at,
+        });
         setCodigo("");
         socket.emit("cupon-canjeado", { salaId: "sala-001", codigo: upper });
         await cargarCupones();
       } else {
-        setResultado(`Error al canjear: ${rd.error}`); setColorRes("red");
+        setResultado(`Error al canjear: ${rd.error}`);
+        setColorRes("red");
       }
     } catch {
-      setResultado("Sin conexión al servidor"); setColorRes("red");
+      setResultado("Sin conexión al servidor");
+      setColorRes("red");
     } finally {
       setCargando(false);
     }
@@ -149,6 +162,7 @@ export default function ValidatePage() {
   return (
     <div className="val-page">
       <div className="val-bg" aria-hidden="true" />
+
       <div className="val-location">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/>
@@ -158,31 +172,39 @@ export default function ValidatePage() {
 
       <header className="val-logo">
         <div className="val-logo__wordmark">
-          <span className="val-logo__snap">snap</span><span className="val-logo__n"> n</span>
+          <span className="val-logo__snap">snap</span>
+          <span className="val-logo__n"> n</span>
           <svg className="val-logo__bolt" viewBox="0 0 18 22" fill="none">
             <path d="M11 2L3 13h7l-1.5 9L17 11h-7L11 2z" fill="#ff8c1a"/>
           </svg>
           <span className="val-logo__win">win</span>
         </div>
-        <p className="val-logo__tagline"><span>live </span><span className="val-logo__exp">experience</span></p>
+        <p className="val-logo__tagline">
+          <span>live </span>
+          <span className="val-logo__exp">experience</span>
+        </p>
       </header>
 
       <main className="val-main">
         <div className="val-top-row">
           <h1 className="val-title">Cupones</h1>
           <div className="val-top-actions">
-            <button className="val-btn-validate" onClick={() => setModalOpen(true)}>+ Validar cupón</button>
-            <button className="val-btn-back" onClick={() => navigate("/admin/dashboard")}>← Dashboard</button>
+            <button className="val-btn-validate" onClick={() => setModalOpen(true)}>
+              + Validar cupón
+            </button>
+            <button className="val-btn-back" onClick={() => navigate("/admin/dashboard")}>
+              ← Dashboard
+            </button>
           </div>
         </div>
 
         <div className="val-summary">
-          {([
+          {[
             { label: "Total generados", val: stats.totalGenerados },
-            { label: "Canjeados",       val: stats.canjeados      },
-            { label: "Pendientes",      val: stats.pendientes     },
-            { label: "Expirados",       val: stats.expirados      },
-          ] as const).map(({ label, val }) => (
+            { label: "Canjeados",       val: stats.canjeados },
+            { label: "Pendientes",      val: stats.pendientes },
+            { label: "Expirados",       val: stats.expirados },
+          ].map(({ label, val }) => (
             <div key={label} className="val-summary-card">
               <p className="val-summary-card__value">{val}</p>
               <p className="val-summary-card__label">{label}</p>
@@ -197,9 +219,14 @@ export default function ValidatePage() {
             <p style={{ color: "#888", textAlign: "center", padding: "2rem" }}>No hay cupones registrados aún.</p>
           ) : (
             <table className="val-table">
-              <thead><tr><th>Código</th><th>Jugador</th><th>Hora generado</th><th>Nivel</th><th>Juego</th><th>Estado</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Código</th><th>Jugador</th><th>Hora</th>
+                  <th>Nivel</th><th>Juego</th><th>Estado</th>
+                </tr>
+              </thead>
               <tbody>
-                {cupones.map(c => (
+                {cupones.map((c) => (
                   <tr key={c.codigo}>
                     <td className="val-td--code">{c.codigo}</td>
                     <td>{c.jugador}</td>
@@ -217,7 +244,7 @@ export default function ValidatePage() {
 
       {modalOpen && (
         <div className="val-modal-overlay" onClick={() => !cargando && resetear()}>
-          <div className="val-modal" onClick={e => e.stopPropagation()}>
+          <div className="val-modal" onClick={(e) => e.stopPropagation()}>
             <button className="val-modal__close" onClick={resetear} disabled={cargando}>✕</button>
             <h2 className="val-modal__title">Validar Cupón</h2>
             <p className="val-modal__subtitle">Ingresa el código que muestra el cliente</p>
@@ -225,14 +252,19 @@ export default function ValidatePage() {
               className="val-modal__input"
               placeholder="Ej: FP-ABCD-XY"
               value={codigo}
-              onChange={e => setCodigo(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === "Enter" && validar()}
+              onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && validar()}
               disabled={cargando}
               autoFocus
             />
-            <button className="val-modal__btn" onClick={validar} disabled={cargando || !codigo.trim()}>
+            <button
+              className="val-modal__btn"
+              onClick={validar}
+              disabled={cargando || !codigo.trim()}
+            >
               {cargando ? "Verificando…" : "Verificar y canjear"}
             </button>
+
             {resultado && resultado !== "Verificando..." && (
               <div className={`val-modal__result val-modal__result--${colorRes}`}>
                 <p className="val-modal__result-title">{resultado}</p>
@@ -243,7 +275,9 @@ export default function ValidatePage() {
                     <p>Vencía: {new Date(infoCupon.expires_at).toLocaleDateString()}</p>
                   </div>
                 )}
-                <button className="val-modal__reset" onClick={resetear}>Validar otro cupón</button>
+                <button className="val-modal__reset" onClick={resetear}>
+                  Validar otro cupón
+                </button>
               </div>
             )}
           </div>

@@ -1,10 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useSocket } from '../../hooks/useSocket';
-import { useNavigate } from 'react-router-dom';
-import MallHeader from '../../components/MallHeader';
-import { rejoinOnResume } from '../../utils/sessionRejoin';
-
-const MALL_JOIN = { salaId: 'sala-001', jugador: { id: 'mall-screen', nombre: 'Mall' } };
+import { useEffect, useRef, useState } from "react";
+import { useSocket } from "../../hooks/useSocket";
+import { useNavigate } from 'react-router-dom'
+import MallHeader from '../../components/MallHeader'
 
 interface JugadorScore {
   nombre: string;
@@ -12,212 +9,93 @@ interface JugadorScore {
   puntos: number;
 }
 
-interface BoardDot {
-  id: string;
-  color: string;
-  x: number; 
-  y: number; 
-}
-
-const DOT_DIAMETER_PX = 22          
-const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
-const MIN_DIST_PX     = DOT_DIAMETER_PX + 1  
-const MAX_ATTEMPTS    = 150         
-
-function findFreePosition(
-  existing: BoardDot[],
-  boardW: number,
-  boardH: number,
-): { x: number; y: number } | null {
-  const margin = DOT_RADIUS_PX + 1
-
-  for (let i = 0; i < MAX_ATTEMPTS; i++) {
-    const x = margin + Math.random() * (boardW - margin * 2)
-    const y = margin + Math.random() * (boardH - margin * 2)
-
-    const overlaps = existing.some((d) => {
-      const dx = d.x - x
-      const dy = d.y - y
-      return Math.sqrt(dx * dx + dy * dy) < MIN_DIST_PX
-    })
-
-    if (!overlaps) return { x, y }
-  }
-
-  return null 
-}
+const TOTAL_DOTS = 180;
+const posicionesAleatorias = Array.from({ length: TOTAL_DOTS }, (_, i) => i)
+  .sort(() => Math.random() - 0.5);
 
 export default function ShakeLivePage() {
-  const socket   = useSocket()
-  const navigate = useNavigate()
-
-  const [scores,    setScores]    = useState<Record<string, JugadorScore>>({})
-  const [dots,      setDots]      = useState<BoardDot[]>([])
-  const [countdown, setCountdown] = useState<number | null>(null)
-
-  const totalPuntosRef  = useRef<Record<string, number>>({})
-  const playerColorsRef = useRef<Record<string, string>>({})
-  const playerNamesRef  = useRef<Record<string, string>>({})
-  const rankingRef      = useRef<{ jugadorId: string; nombre: string; puntos: number; color?: string }[]>([])
-  const dotsRef         = useRef<BoardDot[]>([])          
-  const boardRef        = useRef<HTMLDivElement>(null)
-  const inGameRef       = useRef(false)
-
-  
-  useEffect(() => { dotsRef.current = dots }, [dots])
-
-  const resetBoard = useCallback((full = false) => {
-    setDots([])
-    dotsRef.current = []
-    totalPuntosRef.current = {}
-    rankingRef.current = []
-    if (full) {
-      setScores({})
-      playerColorsRef.current = {}
-      playerNamesRef.current = {}
-    } else {
-      setScores(prev => {
-        const next: Record<string, JugadorScore> = {}
-        Object.entries(prev).forEach(([id, j]) => {
-          next[id] = { ...j, puntos: 0 }
-        })
-        return next
-      })
-    }
-  }, [])
+  const socket   = useSocket();
+  const navigate = useNavigate();
+  const [scores, setScores] = useState<Record<string, JugadorScore>>({});
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const totalPuntosRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
-    const emitJoin = () => socket.emit('join-sala', MALL_JOIN)
-    if (socket.connected) emitJoin()
-    else socket.on('connect', emitJoin)
+    const emitJoin = () => {
+      socket.emit('join-sala', {
+        salaId: 'sala-001',
+        jugador: { id: 'mall-screen', nombre: 'Mall' }
+      });
+    };
+    if (socket.connected) emitJoin();
+    else socket.on('connect', emitJoin);
 
-    const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
-
-    const applyRoster = (jugadores: { id: string; nombre?: string; color?: string }[]) => {
-      const next: Record<string, JugadorScore> = {}
-      jugadores.forEach(j => {
-        if (j.id === 'mall-screen' || j.id === 'admin-panel') return
-        const color = j.color || '#7c3aed'
-        playerColorsRef.current[j.id] = color
-        playerNamesRef.current[j.id] = j.nombre || 'Jugador'
-        next[j.id] = {
-          nombre: j.nombre || 'Jugador',
-          color,
-          puntos: totalPuntosRef.current[j.id] ?? 0,
-        }
-      })
-      setScores(next)
-    }
-
-    socket.on('players-update', (jugadores: any[]) => {
-      if (inGameRef.current) return
-      applyRoster(jugadores)
-    })
-
-    socket.on('score-update', ({ jugadorId, fuerza, color, nombre }: {
-      jugadorId: string; fuerza: number; color?: string; nombre?: string
-    }) => {
-      if (color) playerColorsRef.current[jugadorId] = color
-      if (nombre) playerNamesRef.current[jugadorId] = nombre
-
-      totalPuntosRef.current[jugadorId] =
-        (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza)
-
-      const dotColor = playerColorsRef.current[jugadorId] ?? color ?? '#7c3aed'
-
-      
-      const board = boardRef.current
-      const boardW = board?.clientWidth  ?? 800
-      const boardH = board?.clientHeight ?? 300
-
-      const pos = findFreePosition(dotsRef.current, boardW, boardH)
-
-      if (pos) {
-        const newDot: BoardDot = {
-          id:    `${jugadorId}-${Date.now()}-${Math.random()}`,
-          color: dotColor,
-          x: pos.x,
-          y: pos.y,
-        }
-        setDots(prev => {
-          const next = [...prev, newDot]
-          dotsRef.current = next
-          return next
-        })
-      }
-      
-
+    socket.on("players-update", (jugadores: any[]) => {
       setScores(prev => {
-        const existing = prev[jugadorId]
-        const entry: JugadorScore = existing ?? {
-          nombre: playerNamesRef.current[jugadorId] ?? nombre ?? 'Jugador',
-          color: dotColor,
-          puntos: 0,
-        }
+        const next: Record<string, JugadorScore> = {};
+        jugadores.forEach(j => {
+          if (j.id === 'mall-screen') return;
+          next[j.id] = {
+            nombre: j.nombre || "Jugador",
+            color: j.color || "#888",
+            puntos: prev[j.id]?.puntos ?? totalPuntosRef.current[j.id] ?? 0,
+          };
+        });
+        return next;
+      });
+    });
+
+    socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
+      totalPuntosRef.current[jugadorId] = (totalPuntosRef.current[jugadorId] ?? 0) + Math.round(fuerza);
+      setScores(prev => {
+        if (!prev[jugadorId]) return prev;
         return {
           ...prev,
-          [jugadorId]: {
-            ...entry,
-            color: dotColor,
-            puntos: totalPuntosRef.current[jugadorId],
-          },
-        }
-      })
-    })
+          [jugadorId]: { ...prev[jugadorId], puntos: totalPuntosRef.current[jugadorId] }
+        };
+      });
+    });
 
-    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
+    socket.on("countdown", ({ count }: { count: number }) => setCountdown(count));
+    socket.on("player-finished", () => setTimeout(() => navigate("/mall/results"), 4000));
 
-    socket.on('game-start', ({ game, jugadores }: {
-      game?: string; jugadores?: { id: string; nombre?: string; color?: string }[]
-    }) => {
-      if (game && game !== 'shake') return
-      inGameRef.current = true
-      resetBoard(false)
-      setCountdown(null)
-      if (jugadores && jugadores.length > 0) applyRoster(jugadores)
-    })
-
-    socket.on('player-finished', () => {
-      setTimeout(
-        () => navigate('/mall/results', { state: { ranking: rankingRef.current } }),
-        4000,
-      )
-    })
-
-    socket.on('ranking-partida', (ranking: any[]) => {
+    // Limpiar al iniciar nueva ronda
+    socket.on("ranking-partida", (ranking: any[]) => {
       if (ranking.length === 0) {
-        inGameRef.current = false
-        resetBoard(true)
-      } else {
-        rankingRef.current = ranking
+        setScores({});
+        totalPuntosRef.current = {};
       }
-    })
-
-    socket.on('round-reset', () => {
-      inGameRef.current = false
-      resetBoard(true)
-      setCountdown(null)
-      navigate('/mall/waiting')
-    })
+    });
 
     return () => {
-      socket.off('connect', emitJoin)
-      socket.off('players-update')
-      socket.off('score-update')
-      socket.off('countdown')
-      socket.off('game-start')
-      socket.off('player-finished')
-      socket.off('ranking-partida')
-      socket.off('round-reset')
-      cleanupRejoin?.()
-    }
-  }, [socket, navigate, resetBoard])
+      socket.off('connect', emitJoin);
+      socket.off("players-update");
+      socket.off("score-update");
+      socket.off("countdown");
+      socket.off("player-finished");
+      socket.off("ranking-partida");
+    };
+  }, [socket, navigate]);
 
   const ordenados = Object.entries(scores)
     .filter(([id]) => id !== 'mall-screen')
-    .sort(([, a], [, b]) => b.puntos - a.puntos)
+    .sort(([, a], [, b]) => b.puntos - a.puntos);
 
-  const getMedal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? ''
+  const totalPuntos = ordenados.reduce((s, [, j]) => s + j.puntos, 0);
+
+  // Construir dots con posiciones aleatorias — vacío al inicio
+  const dots: string[] = Array(TOTAL_DOTS).fill('empty');
+  if (totalPuntos > 0) {
+    let posIdx = 0;
+    ordenados.forEach(([, j]) => {
+      const count = Math.round((j.puntos / totalPuntos) * TOTAL_DOTS);
+      for (let i = 0; i < count && posIdx < TOTAL_DOTS; i++, posIdx++) {
+        dots[posicionesAleatorias[posIdx]] = j.color;
+      }
+    });
+  }
+
+  const getMedal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? '';
 
   return (
     <div className="mall-screen mall-shake">
@@ -236,7 +114,6 @@ export default function ShakeLivePage() {
       )}
 
       <div className="mall-shake__layout">
-        
         <aside>
           {ordenados.slice(1, 3).map(([id, j], i) => (
             <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
@@ -250,19 +127,15 @@ export default function ShakeLivePage() {
           ))}
         </aside>
 
-       
         <div style={{ flex: 1 }}>
-          
-          <div className="mall-board" ref={boardRef} aria-hidden>
-            {dots.map((dot) => (
+          <div className="mall-board" aria-hidden>
+            {dots.map((color, i) => (
               <span
-                key={dot.id}
-                className="mall-board__dot mall-board__dot--filled"
+                key={i}
+                className={`mall-board__dot${color !== 'empty' ? ' mall-board__dot--filled' : ''}`}
                 style={{
-                  left:            `${dot.x}px`,
-                  top:             `${dot.y}px`,
-                  background:      dot.color,
-                  ['--dot-color' as string]: dot.color,
+                  background: color === 'empty' ? 'transparent' : color,
+                  border: color === 'empty' ? '1px solid rgba(255,255,255,0.1)' : 'none',
                 }}
               />
             ))}
@@ -274,7 +147,7 @@ export default function ShakeLivePage() {
                 <div key={id} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   background: 'rgba(255,255,255,0.05)', borderRadius: 8,
-                  padding: '6px 14px', border: `1px solid ${j.color}`,
+                  padding: '6px 14px', border: `1px solid ${j.color}`
                 }}>
                   <span>{getMedal(i)}</span>
                   <span style={{ color: j.color, fontWeight: 'bold', fontSize: '0.9rem' }}>{j.nombre}</span>
@@ -289,10 +162,9 @@ export default function ShakeLivePage() {
           </div>
         </div>
 
-        
         <aside>
           {ordenados[0] && (() => {
-            const [id, j] = ordenados[0]
+            const [id, j] = ordenados[0];
             return (
               <div key={id} className="mall-leader-card" style={{ borderColor: j.color }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -302,10 +174,10 @@ export default function ShakeLivePage() {
                 <p className="mall-leader-card__pts">{j.puntos.toLocaleString()} pts</p>
                 <p className="mall-leader-card__rank">🥇 1er lugar</p>
               </div>
-            )
+            );
           })()}
         </aside>
       </div>
     </div>
-  )
+  );
 }

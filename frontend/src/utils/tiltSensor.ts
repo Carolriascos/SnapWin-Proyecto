@@ -1,5 +1,3 @@
-
-
 export type TiltDirection = -1 | 1
 
 export type SensorStatus =
@@ -30,11 +28,11 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG      = 5
-const LANE_THRESHOLD_DEG = 12
-const COOLDOWN_MS        = 350
-const SMOOTHING_ALPHA    = 0.25
-const CALIBRATION_COUNT  = 6
+const DEAD_ZONE_DEG      = 3   
+const LANE_THRESHOLD_DEG = 7    
+const COOLDOWN_MS        = 200  
+const SMOOTHING_ALPHA    = 0.5 
+const CALIBRATION_COUNT  = 4    
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
 
@@ -75,7 +73,7 @@ export function isMobileDevice(): boolean {
 export function getSensorStatusMessage(status: SensorStatus): string | null {
   switch (status) {
     case 'pending_permission':
-      return null 
+      return null
     case 'denied':
       return 'No pudimos acceder al sensor. Usa los botones ◀ ▶ o desliza el dedo.'
     case 'unavailable':
@@ -96,9 +94,9 @@ function screenAngle(): number {
 function tiltFromGravity(ax: number, ay: number, az: number): number {
   const angle = screenAngle()
   let gx = ax, gy = ay
-  if (angle === 90)                    { gx = -ay; gy =  ax }
-  else if (angle === 180)              { gx = -ax; gy = -ay }
-  else if (angle === 270 || angle === -90) { gx = ay; gy = -ax }
+  if (angle === 90)                        { gx = -ay; gy =  ax }
+  else if (angle === 180)                  { gx = -ax; gy = -ay }
+  else if (angle === 270 || angle === -90) { gx =  ay; gy = -ax }
   const denom = Math.sqrt(gy * gy + az * az) || 1
   return (Math.atan2(gx, denom) * 180) / Math.PI
 }
@@ -203,12 +201,13 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
 
     if (now - lastChangeTime < COOLDOWN_MS) return
 
+
     if (relative > LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(-1)
+      callbacks.onTilt(1)   // derecha
       lastChangeTime = now
       armed = false
     } else if (relative < -LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(1)
+      callbacks.onTilt(-1)  // izquierda
       lastChangeTime = now
       armed = false
     }

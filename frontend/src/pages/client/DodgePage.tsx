@@ -37,8 +37,7 @@ export default function DodgePage() {
   const pausedRef       = useRef(false)
   const sensorRef       = useRef<ReturnType<typeof createTiltSensor> | null>(null)
   const sensorActiveRef = useRef(false)
-  const gameStartedRef  = useRef(false) // si el usuario ya tocó para empezar
-
+  const gameStartedRef  = useRef(false) 
   const [carril,       setCarril]       = useState(1)
   const [obstaculos,   setObstaculos]   = useState<Obstacle[]>([])
   const [segundos,     setSegundos]     = useState(DURACION)
@@ -46,7 +45,6 @@ export default function DodgePage() {
   const [puntos,       setPuntos]       = useState(0)
   const [parpadeo,     setParpadeo]     = useState(false)
   const [sensorStatus, setSensorStatus] = useState<SensorStatus>('pending_permission')
-  // Mostrar pantalla de inicio hasta que el usuario toque
   const [gameStarted,  setGameStarted]  = useState(false)
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
@@ -114,18 +112,14 @@ export default function DodgePage() {
     await sensor.start()
   }, [setCarrilSeguro])
 
-  // Función que el usuario llama al tocar "¡Empezar!"
   const handleStartGame = useCallback(async () => {
     if (gameStartedRef.current) return
     gameStartedRef.current = true
     setGameStarted(true)
-    // Resetear el timer desde este momento
     gameEndAtRef.current = Date.now() + DURACION * 1000
-    // Arrancar sensores — el gesto del usuario ya ocurrió
     await startSensors()
   }, [startSensors])
 
-  // Game loop — solo corre después de que el usuario tocó
   useEffect(() => {
     if (!gameStarted) return
 
@@ -157,7 +151,6 @@ export default function DodgePage() {
     return () => { clearInterval(spawn); clearInterval(tick) }
   }, [gameStarted, perderVida, emitSync])
 
-  // Timer
   useEffect(() => {
     if (!gameStarted) return
     const intervalo = setInterval(() => {
@@ -169,7 +162,6 @@ export default function DodgePage() {
     return () => clearInterval(intervalo)
   }, [gameStarted, terminar])
 
-  // Swipe táctil — siempre disponible
   useEffect(() => {
     let startX = 0
     const arena = document.getElementById('dodge-arena-touch')
@@ -186,7 +178,6 @@ export default function DodgePage() {
     return () => { arena.removeEventListener('touchstart', ts); arena.removeEventListener('touchend', te) }
   }, [setCarrilSeguro])
 
-  // Reconectar al volver de pantalla bloqueada
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
@@ -219,7 +210,6 @@ export default function DodgePage() {
   const timerClass = segundos > 15 ? 'dodge-timer--ok' : segundos > 5 ? 'dodge-timer--warn' : 'dodge-timer--danger'
   const statusMsg  = getSensorStatusMessage(sensorStatus)
 
-  // ── Pantalla de inicio — toca para activar sensores ──
   if (!gameStarted) {
     return (
       <div className="snap-screen dodge-game">
@@ -256,7 +246,6 @@ export default function DodgePage() {
     )
   }
 
-  // ── Pantalla de juego ──
   return (
     <div className="snap-screen dodge-game">
       <div className="snap-pattern" aria-hidden />

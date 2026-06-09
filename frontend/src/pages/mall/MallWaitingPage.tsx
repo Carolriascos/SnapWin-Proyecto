@@ -7,6 +7,12 @@ import { rejoinOnResume } from '../../utils/sessionRejoin'
 
 const MALL_JOIN = { salaId: 'sala-001', jugador: { id: 'mall-screen', nombre: 'Mall' } }
 
+const esNoJugador = (j: Jugador) =>
+  j.id === 'mall-screen' ||
+  j.id === 'admin-panel' ||
+  j.nombre === 'Mall' ||
+  j.nombre === 'Admin'
+
 export default function MallWaitingPage() {
   const navigate  = useNavigate()
   const socket    = useSocket()
@@ -20,7 +26,7 @@ export default function MallWaitingPage() {
     else socket.on('connect', emitJoin)
 
     socket.on('players-update', (data: Jugador[]) => {
-      setJugadores(data)
+      setJugadores(data.filter(j => !esNoJugador(j)))
     })
 
     socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))

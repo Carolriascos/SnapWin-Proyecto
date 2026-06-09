@@ -56,13 +56,18 @@ export const setupSocket = (io: Server) => {
   const resetSala = (salaId: string) => {
     cancelCountdown(salaId);
     const jugadoresActuales = salas.get(salaId) ?? [];
+    const noJugadores = jugadoresActuales.filter(
+      (j) => j.id === "mall-screen" || j.id === "admin-panel"
+    );
+    salas.set(salaId, noJugadores);
     salaPuntajes.set(salaId, {});
     salaTerminados.set(salaId, new Set());
     salaCountdownStarted.delete(salaId);
     salaAdminWantsStart.delete(salaId);
+    salaGameMode.delete(salaId);
     io.to(salaId).emit("round-reset");
     io.to(salaId).emit("ranking-partida", []);
-    io.to(salaId).emit("players-update", jugadoresActuales);
+    io.to(salaId).emit("players-update", noJugadores);
   };
 
   io.on("connection", (socket) => {
@@ -142,24 +147,16 @@ export const setupSocket = (io: Server) => {
 
     socket.on("admin-start-round", (data: { salaId: string }) => {
       const salaId = data.salaId;
+      resetSala(salaId);
+
       const jugadoresActuales = salas.get(salaId) ?? [];
       const humanos = jugadoresActuales.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
 
-      cancelCountdown(salaId);
-      salaPuntajes.set(salaId, {});
-      salaTerminados.set(salaId, new Set());
-      salaCountdownStarted.delete(salaId);
-      salaAdminWantsStart.delete(salaId);
-      io.to(salaId).emit("round-reset");
-      io.to(salaId).emit("ranking-partida", []);
-
       if (humanos.length >= 2) {
-        // Hay jugadores — arrancar inmediatamente sin countdown
         startGame(salaId);
         console.log(`Admin arrancó partida inmediata en ${salaId} con ${humanos.length} jugadores`);
       } else {
         salaAdminWantsStart.set(salaId, true);
-        io.to(salaId).emit("players-update", jugadoresActuales);
         console.log(`Admin esperando jugadores en ${salaId} (${humanos.length} conectados)`);
       }
     });

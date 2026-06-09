@@ -2,10 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSocket } from '../../hooks/useSocket'
 import { useNavigate } from 'react-router-dom'
 import MallHeader from '../../components/MallHeader'
-import { rejoinOnResume } from '../../utils/sessionRejoin'
 import '../../styles/pages/mall/dodge-live.css'
-
-const MALL_JOIN = { salaId: 'sala-001', jugador: { id: 'mall-screen', nombre: 'Mall' } }
 
 interface JugadorDodge {
   nombre: string
@@ -13,105 +10,96 @@ interface JugadorDodge {
   carril: number
   vidas: number
   puntos: number
-  eliminado: boolean
-  obstaculos: { id: number; lane: number; y: number }[]
+  eliminado: boolean  
 }
 
-const LANES = 4
+interface Obstaculo {
+  id: number
+  lane: number
+  y: number
+}
+
+const LANES         = 4
 const VIDAS_INICIAL = 3
+const SPAWN_MS      = 1400
+const TICK_MS       = 40
+const SPEED_PCT     = 2.8
 
 function laneX(lane: number) {
   return ((lane + 0.5) / LANES) * 100
-}
-
-function jugadorVacio(nombre = 'Jugador', color = '#7c3aed'): JugadorDodge {
-  return { nombre, color, carril: 1, vidas: VIDAS_INICIAL, puntos: 0, eliminado: false, obstaculos: [] }
-}
-
-function rosterToJugadores(roster: { id: string; nombre?: string; color?: string }[]): Record<string, JugadorDodge> {
-  const next: Record<string, JugadorDodge> = {}
-  roster.forEach(j => {
-    next[j.id] = jugadorVacio(j.nombre, j.color)
-  })
-  return next
 }
 
 export default function DodgeLivePage() {
   const socket   = useSocket()
   const navigate = useNavigate()
 
-  const [jugadores, setJugadores] = useState<Record<string, JugadorDodge>>({})
-  const [countdown, setCountdown] = useState<number | null>(null)
-  const [gameOver,  setGameOver]  = useState(false)
+  const [jugadores,  setJugadores]  = useState<Record<string, JugadorDodge>>({})
+  const [obstaculos, setObstaculos] = useState<Obstaculo[]>([])
+  const [countdown,  setCountdown]  = useState<number | null>(null)
+  const [gameOver,   setGameOver]   = useState(false)
 
-  const inGameRef    = useRef(false)
+  const jugadoresRef = useRef<Record<string, JugadorDodge>>({})
+  const idRef        = useRef(0)
   const rankingRef   = useRef<{ jugadorId: string; nombre: string; puntos: number; color: string }[]>([])
 
+  useEffect(() => { jugadoresRef.current = jugadores }, [jugadores])
+
   useEffect(() => {
-    const emitJoin = () => socket.emit('join-sala', MALL_JOIN)
+    const emitJoin = () => {
+      socket.emit('join-sala', {
+        salaId: 'sala-001',
+        jugador: { id: 'mall-screen', nombre: 'Mall' },
+      })
+    }
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
 
-    const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
-
-    socket.on('players-update', (data: { id: string; nombre?: string; color?: string }[]) => {
-      if (inGameRef.current) return
-      setJugadores(rosterToJugadores(data))
-    })
-
-    socket.on('dodge-player-state', (data: {
-      jugadorId: string
-      nombre?: string
-      color?: string
-      carril: number
-      vidas: number
-      puntos: number
-      eliminado: boolean
-      obstaculos?: { id: number; lane: number; y: number }[]
-    }) => {
+    socket.on('players-update', (data: any[]) => {
       setJugadores(prev => {
-        const base = prev[data.jugadorId] ?? jugadorVacio(data.nombre, data.color)
-        return {
-          ...prev,
-          [data.jugadorId]: {
-            ...base,
-            nombre:    data.nombre ?? base.nombre,
-            color:     data.color  ?? base.color,
-            carril:    data.carril,
-            vidas:     data.vidas,
-            puntos:    data.puntos,
-            eliminado: data.eliminado,
-            obstaculos: data.obstaculos ?? base.obstaculos,
-          },
-        }
+        const next = { ...prev }
+        data.forEach(j => {
+          if (j.id === 'mall-screen') return
+          if (!next[j.id]) {
+            next[j.id] = {
+              nombre:    j.nombre || 'Jugador',
+              color:     j.color  || '#7c3aed',
+              carril:    1,
+              vidas:     VIDAS_INICIAL,
+              puntos:    0,
+              eliminado: false,  
+            }
+          }
+        })
+        return next
       })
     })
 
-    socket.on('countdown', ({ count }: { count: number }) => {
-      setCountdown(count > 0 ? count : null)
+    socket.on('dodge-update', ({ jugadorId, carril, posicion }: any) => {
+      setJugadores(prev => {
+        if (!prev[jugadorId]) return prev
+        let lane = carril ?? 1
+        if (posicion != null)
+          lane = Math.min(3, Math.max(0, Math.round((posicion / 100) * 4 - 0.5)))
+        return { ...prev, [jugadorId]: { ...prev[jugadorId], carril: lane } }
+      })
     })
 
-    socket.on('game-start', ({ game, jugadores: roster }: { game?: string; jugadores?: { id: string; nombre?: string; color?: string }[] }) => {
-      if (game && game !== 'dodge') return
-      inGameRef.current = true
+    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
+
+    socket.on('game-start', () => {
       setCountdown(null)
       setGameOver(false)
-      if (roster && roster.length > 0) {
-        setJugadores(rosterToJugadores(roster))
-      } else {
-        setJugadores(prev => {
-          const next = { ...prev }
-          Object.keys(next).forEach(id => {
-            next[id] = { ...next[id], vidas: VIDAS_INICIAL, puntos: 0, eliminado: false, obstaculos: [], carril: 1 }
-          })
-          return next
+      setObstaculos([])
+      setJugadores(prev => {
+        const next = { ...prev }
+        Object.keys(next).forEach(id => {
+          next[id] = { ...next[id], vidas: VIDAS_INICIAL, puntos: 0, eliminado: false }
         })
-      }
+        return next
+      })
     })
 
-    socket.on('partida-finalizada', ({ ranking }: { ranking: any[] }) => {
-      if (ranking.length > 0) rankingRef.current = ranking
-      inGameRef.current = false
+    socket.on('player-finished', () => {
       setGameOver(true)
       setTimeout(() => {
         navigate('/mall/results', { state: { ranking: rankingRef.current, game: 'dodge' } })
@@ -119,38 +107,83 @@ export default function DodgeLivePage() {
     })
 
     socket.on('ranking-partida', (ranking: any[]) => {
-      if (ranking.length === 0) {
-        rankingRef.current = []
-        inGameRef.current = false
-        setJugadores({})
-      } else {
-        rankingRef.current = ranking
-      }
-    })
-
-    socket.on('round-reset', () => {
-      inGameRef.current = false
-      setJugadores({})
-      setCountdown(null)
-      setGameOver(false)
-      rankingRef.current = []
-      navigate('/mall/waiting')
+      if (ranking.length > 0) rankingRef.current = ranking
     })
 
     return () => {
       socket.off('connect', emitJoin)
       socket.off('players-update')
-      socket.off('dodge-player-state')
+      socket.off('dodge-update')
       socket.off('countdown')
       socket.off('game-start')
-      socket.off('partida-finalizada')
+      socket.off('player-finished')
       socket.off('ranking-partida')
-      socket.off('round-reset')
-      cleanupRejoin?.()
     }
   }, [socket, navigate])
 
-  const lista = Object.entries(jugadores)
+  useEffect(() => {
+    const spawnId = setInterval(() => {
+      if (gameOver) return
+      setObstaculos(prev => [
+        ...prev,
+        { id: idRef.current++, lane: Math.floor(Math.random() * LANES), y: -8 },
+      ])
+    }, SPAWN_MS)
+
+    const tickId = setInterval(() => {
+      if (gameOver) return
+      setObstaculos(prev => {
+        const jug = jugadoresRef.current
+
+        const colisionados = new Set<number>()
+        prev.forEach(o => {
+          if (o.y > 72 && o.y < 88) {
+            Object.values(jug).forEach(j => {
+              if (!j.eliminado && j.carril === o.lane) colisionados.add(o.id)
+            })
+          }
+        })
+
+        if (colisionados.size > 0) {
+          setJugadores(jugPrev => {
+            const next = { ...jugPrev }
+            Object.entries(next).forEach(([id, j]) => {
+              if (j.eliminado) return  
+              const hit = prev.some(o => colisionados.has(o.id) && o.lane === j.carril)
+              if (hit && j.vidas > 0) {
+                const nuevasVidas = j.vidas - 1
+                next[id] = { ...j, vidas: nuevasVidas, eliminado: nuevasVidas === 0 }
+              }
+            })
+            return next
+          })
+        }
+
+        const esquivados = prev.filter(o => o.y >= 100 && !colisionados.has(o.id))
+        if (esquivados.length > 0) {
+          setJugadores(jugPrev => {
+            const next = { ...jugPrev }
+            Object.entries(next).forEach(([id, j]) => {
+              if (!j.eliminado) next[id] = { ...j, puntos: j.puntos + esquivados.length * 100 }
+            })
+            return next
+          })
+        }
+
+        return prev
+          .filter(o => !colisionados.has(o.id))
+          .map(o => ({ ...o, y: o.y + SPEED_PCT }))
+          .filter(o => o.y < 105)
+      })
+    }, TICK_MS)
+
+    return () => {
+      clearInterval(spawnId)
+      clearInterval(tickId)
+    }
+  }, [gameOver])
+
+  const lista = Object.entries(jugadores).filter(([id]) => id !== 'mall-screen')
 
   const listaOrdenada = [...lista].sort(([, a], [, b]) => {
     if (a.eliminado !== b.eliminado) return a.eliminado ? 1 : -1
@@ -217,7 +250,7 @@ export default function DodgeLivePage() {
                   />
                 ))}
 
-                {j.obstaculos.map(o => (
+                {obstaculos.map(o => (
                   <div
                     key={o.id}
                     className="dodge-obstacle"
@@ -270,23 +303,23 @@ export default function DodgeLivePage() {
             <h2 className="dodge-results-panel__title">🏆 RESULTADOS</h2>
             <div className="dodge-results-podium">
               {[1, 0, 2].map((idx) => {
-                const r = rankingRef.current[idx]
-                if (!r) return null
+                const j = rankingRef.current[idx]
+                if (!j) return null
                 const heights = [140, 180, 110]
                 return (
                   <div
-                    key={r.jugadorId}
+                    key={j.jugadorId}
                     className="dodge-podium-place"
                     style={{
                       height:      heights[idx],
-                      borderColor: r.color,
+                      borderColor: j.color,
                       order:       idx === 0 ? 2 : idx === 1 ? 1 : 3,
                     }}
                   >
                     <span className="dodge-podium-place__medal">{getMedal(idx)}</span>
-                    <span className="dodge-podium-place__name">{r.nombre}</span>
-                    <span className="dodge-podium-place__pts" style={{ color: r.color }}>
-                      {r.puntos.toLocaleString()} pts
+                    <span className="dodge-podium-place__name">{j.nombre}</span>
+                    <span className="dodge-podium-place__pts" style={{ color: j.color }}>
+                      {j.puntos.toLocaleString()} pts
                     </span>
                   </div>
                 )
