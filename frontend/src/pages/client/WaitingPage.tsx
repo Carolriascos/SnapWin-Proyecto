@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import { Jugador } from '../../types'
@@ -10,27 +10,28 @@ export default function WaitingPage() {
   const socket    = useSocket()
   const [jugadores, setJugadores] = useState<Jugador[]>([])
   const [countdown, setCountdown] = useState<number | null>(null)
+  const joinDataRef = useRef<{ salaId: string; jugador: any } | null>(null)
 
   useEffect(() => {
     if (!hasGameMode()) { navigate('/'); return }
 
     const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
     const nombre    = localStorage.getItem('nombre')    ?? 'Jugador'
-    const color     = localStorage.getItem('color')     ?? '#7c3aed'  // ← incluir color
+    const color     = localStorage.getItem('color')     ?? '#7c3aed'
     const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
 
-    const emitJoin = () => {
-      socket.emit('join-sala', {
-        salaId,
-        jugador: { id: jugadorId, nombre, color, gameMode: getGameMode() }, // ← color enviado
-      })
-    }
+    const joinData = { salaId, jugador: { id: jugadorId, nombre, color, gameMode: getGameMode() } }
+    joinDataRef.current = joinData
+
+    const emitJoin = () => socket.emit('join-sala', joinData)
 
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
 
+    socket.on('reconnect', emitJoin)
+
     socket.on('players-update', (data: any) => {
-      const soloJugadores = data.filter((j: any) => j.id !== 'mall-screen')
+      const soloJugadores = data.filter((j: any) => j.id !== 'mall-screen' && j.id !== 'admin-panel')
       setJugadores(soloJugadores)
     })
 
@@ -41,13 +42,32 @@ export default function WaitingPage() {
       navigate(modo === 'dodge' ? '/dodge' : '/shake')
     })
 
+    socket.on('round-reset', () => {
+      setJugadores([])
+      setCountdown(null)
+    })
+
     return () => {
       socket.off('connect', emitJoin)
+      socket.off('reconnect', emitJoin)
       socket.off('players-update')
       socket.off('countdown')
       socket.off('game-start')
+      socket.off('round-reset')
     }
   }, [socket, navigate])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && joinDataRef.current) {
+        if (socket.connected) {
+          socket.emit('join-sala', joinDataRef.current)
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [socket])
 
   const progressPct = countdown !== null && countdown > 0
     ? ((30 - Math.min(countdown, 30)) / 30) * 100

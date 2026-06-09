@@ -12,33 +12,39 @@ export default function MallWaitingPage() {
 
   useEffect(() => {
     const emitJoin = () => {
-      socket.emit('join-sala', { 
-        salaId: 'sala-001', 
-        jugador: { id: 'mall-screen', nombre: 'Mall' } 
+      socket.emit('join-sala', {
+        salaId: 'sala-001',
+        jugador: { id: 'mall-screen', nombre: 'Mall' }
       })
     }
 
-    if (socket.connected) {
-      emitJoin()
-    } else {
-      socket.on('connect', emitJoin)
-    }
+    if (socket.connected) emitJoin()
+    else socket.on('connect', emitJoin)
 
-    socket.on('players-update', (data: Jugador[]) => setJugadores(data))
-    socket.on('countdown',      ({ count }: { count: number }) => setCountdown(count))
+    socket.on('players-update', (data: Jugador[]) => {
+      const soloJugadores = data.filter(j => j.id !== 'mall-screen' && j.id !== 'admin-panel')
+      setJugadores(soloJugadores)
+    })
+
+    socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
+
     socket.on('game-start', ({ game }: { game?: string }) =>
       navigate(game === 'dodge' ? '/mall/dodge' : '/mall/shake')
     )
+
+    socket.on('round-reset', () => {
+      setJugadores([])
+      setCountdown(null)
+    })
 
     return () => {
       socket.off('connect', emitJoin)
       socket.off('players-update')
       socket.off('countdown')
       socket.off('game-start')
+      socket.off('round-reset')
     }
   }, [socket, navigate])
-
-  const lista = jugadores.filter(j => j.id !== 'mall-screen')
 
   return (
     <div className="mall-screen">
@@ -60,14 +66,14 @@ export default function MallWaitingPage() {
           <div className="mall-waiting__glow" aria-hidden />
           <h2 className="mall-waiting__title">SALA DE ESPERA</h2>
           <p className="mall-waiting__count">
-            {lista.length} JUGADOR{lista.length !== 1 ? 'ES' : ''}
+            {jugadores.length} JUGADOR{jugadores.length !== 1 ? 'ES' : ''}
           </p>
 
-          {lista.length === 0 ? (
+          {jugadores.length === 0 ? (
             <p className="mall-waiting__empty">Esperando jugadores...</p>
           ) : (
             <div className="mall-waiting__grid">
-              {lista.map(j => (
+              {jugadores.map(j => (
                 <p key={j.id} className="mall-player-chip">
                   {j.nombre || 'Jugador'}
                 </p>

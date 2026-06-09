@@ -4,72 +4,61 @@ import { useSocket } from '../../hooks/useSocket'
 import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
 
-const DURACION = 30
-const LANES = 4
+const DURACION   = 30
+const LANES      = 4
 const PLAYER_ROW = 82
-const HIT_ROW = 72
-const SPAWN_MS = 900
-const TICK_MS = 32
+const HIT_ROW    = 72
+const SPAWN_MS   = 900
+const TICK_MS    = 32
 
 type Obstacle = { id: number; lane: number; y: number }
 
-function laneToPercent(lane: number) {
-  return ((lane + 0.5) / LANES) * 100
-}
+function laneToPercent(lane: number) { return ((lane + 0.5) / LANES) * 100 }
 
 export default function DodgePage() {
   const navigate = useNavigate()
-  const socket = useSocket()
-  const terminadoRef = useRef(false)
-  const invencibleRef = useRef(false)
-  const [parpadeo, setParpadeo] = useState(false)
-  const idRef = useRef(0)
-  const carrilRef = useRef(1)
-  const obstaculosRef = useRef<Obstacle[]>([])
-  const puntosRef = useRef(0)
-  const vidasRef = useRef(3)
+  const socket   = useSocket()
 
-  const [carril, setCarril] = useState(1)
+  const terminadoRef   = useRef(false)
+  const invencibleRef  = useRef(false)
+  const idRef          = useRef(0)
+  const carrilRef      = useRef(1)
+  const obstaculosRef  = useRef<Obstacle[]>([])
+  const puntosRef      = useRef(0)
+  const vidasRef       = useRef(3)
+  const lastGammaRef   = useRef(0)
+  const lastOrientTime = useRef(0)
+
+  const [carril,     setCarril]     = useState(1)
   const [obstaculos, setObstaculos] = useState<Obstacle[]>([])
-  const [segundos, setSegundos] = useState(DURACION)
-  const [vidas, setVidas] = useState(3)
-  const [puntos, setPuntos] = useState(0)
+  const [segundos,   setSegundos]   = useState(DURACION)
+  const [vidas,      setVidas]      = useState(3)
+  const [puntos,     setPuntos]     = useState(0)
+  const [parpadeo,   setParpadeo]   = useState(false)
+  const [sensorOk,   setSensorOk]   = useState<boolean | null>(null) // null=no sabe aún
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
-  const salaId = localStorage.getItem('salaId') ?? 'sala-001'
+  const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
 
   const emitSync = useCallback(() => {
     const lane = carrilRef.current
-    const pos = laneToPercent(lane)
-    socket.emit('dodge-data', { salaId, jugadorId, carril: lane, posicion: pos, angulo: 0 })
+    socket.emit('dodge-data', { salaId, jugadorId, carril: lane, posicion: laneToPercent(lane), angulo: 0 })
     socket.emit('dodge-sync', {
-      salaId,
-      jugadorId,
+      salaId, jugadorId,
       carril: lane,
       vidas: vidasRef.current,
       puntos: puntosRef.current,
       eliminado: vidasRef.current <= 0,
-      obstaculos: obstaculosRef.current.map((o) => ({ id: o.id, lane: o.lane, y: o.y })),
+      obstaculos: obstaculosRef.current.map(o => ({ id: o.id, lane: o.lane, y: o.y })),
     })
   }, [socket, salaId, jugadorId])
 
-  const emitPosicion = useCallback(
-    (lane: number) => {
-      carrilRef.current = lane
-      emitSync()
-    },
-    [emitSync]
-  )
-
-  const setCarrilSeguro = useCallback(
-    (lane: number) => {
-      const l = Math.min(LANES - 1, Math.max(0, lane))
-      carrilRef.current = l
-      setCarril(l)
-      emitPosicion(l)
-    },
-    [emitPosicion]
-  )
+  const setCarrilSeguro = useCallback((lane: number) => {
+    const l = Math.min(LANES - 1, Math.max(0, lane))
+    carrilRef.current = l
+    setCarril(l)
+    emitSync()
+  }, [emitSync])
 
   const terminar = useCallback(async () => {
     if (terminadoRef.current) return
@@ -91,117 +80,130 @@ export default function DodgePage() {
     vidasRef.current -= 1
     setVidas(vidasRef.current)
     emitSync()
-    setTimeout(() => {
-      invencibleRef.current = false
-      setParpadeo(false)
-    }, 1200)
-    if (vidasRef.current <= 0) {
-      setTimeout(() => terminar(), 400)
-    }
+    setTimeout(() => { invencibleRef.current = false; setParpadeo(false) }, 1200)
+    if (vidasRef.current <= 0) setTimeout(() => terminar(), 400)
   }, [terminar, emitSync])
 
-  
+
   useEffect(() => {
     const spawn = setInterval(() => {
       if (terminadoRef.current) return
-      const obs: Obstacle = {
-        id: idRef.current++,
-        lane: Math.floor(Math.random() * LANES),
-        y: -12,
-      }
+      const obs: Obstacle = { id: idRef.current++, lane: Math.floor(Math.random() * LANES), y: -12 }
       obstaculosRef.current = [...obstaculosRef.current, obs]
     }, SPAWN_MS)
 
     const tick = setInterval(() => {
       if (terminadoRef.current) return
-
       let hit = false
       const next: Obstacle[] = []
-
       for (const o of obstaculosRef.current) {
         const y = o.y + 2.8
         if (y > 105) continue
-
         if (!hit && o.lane === carrilRef.current && y >= HIT_ROW && y <= PLAYER_ROW + 8) {
-          hit = true
-          perderVida()
-          continue
+          hit = true; perderVida(); continue
         }
         next.push({ ...o, y })
       }
-
       obstaculosRef.current = next
       setObstaculos([...next])
-
       puntosRef.current += 2
       setPuntos(puntosRef.current)
       emitSync()
     }, TICK_MS)
 
-    return () => {
-      clearInterval(spawn)
-      clearInterval(tick)
-    }
+    return () => { clearInterval(spawn); clearInterval(tick) }
   }, [perderVida, terminar, emitSync])
 
-  
+
   useEffect(() => {
     const intervalo = setInterval(() => {
-      setSegundos((prev) => {
-        if (prev <= 1) {
-          clearInterval(intervalo)
-          terminar()
-          return 0
-        }
+      setSegundos(prev => {
+        if (prev <= 1) { clearInterval(intervalo); terminar(); return 0 }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(intervalo)
   }, [terminar])
 
-  
+
   useEffect(() => {
-    const handler = (e: DeviceOrientationEvent) => {
-      const gamma = e.gamma ?? 0
-      if (gamma < -12) setCarrilSeguro(carrilRef.current - 1)
-      else if (gamma > 12) setCarrilSeguro(carrilRef.current + 1)
+    const requestAndListen = () => {
+      const handler = (e: DeviceOrientationEvent) => {
+        if (!e.gamma && e.gamma !== 0) return
+        setSensorOk(true)
+
+        const now = Date.now()
+        if (now - lastOrientTime.current < 300) return
+
+        const gamma = e.gamma ?? 0
+        const delta = gamma - lastGammaRef.current
+        lastGammaRef.current = gamma
+
+        if (gamma < -15) {
+          lastOrientTime.current = now
+          setCarrilSeguro(carrilRef.current - 1)
+        } else if (gamma > 15) {
+          lastOrientTime.current = now
+          setCarrilSeguro(carrilRef.current + 1)
+        }
+      }
+
+
+      const DevOrient = DeviceOrientationEvent as any
+      if (typeof DevOrient.requestPermission === 'function') {
+        DevOrient.requestPermission()
+          .then((state: string) => {
+            if (state === 'granted') {
+              window.addEventListener('deviceorientation', handler)
+              setSensorOk(true)
+            } else {
+              setSensorOk(false)
+            }
+          })
+          .catch(() => setSensorOk(false))
+      } else {
+        window.addEventListener('deviceorientation', handler)
+        setTimeout(() => { if (sensorOk === null) setSensorOk(false) }, 2000)
+      }
+
+      return () => window.removeEventListener('deviceorientation', handler)
     }
-    window.addEventListener('deviceorientation', handler)
-    return () => window.removeEventListener('deviceorientation', handler)
+
+    const cleanup = requestAndListen()
+    return cleanup
   }, [setCarrilSeguro])
+
 
   useEffect(() => {
     let startX = 0
-    const onStart = (x: number) => {
-      startX = x
-    }
-    const onEnd = (x: number) => {
-      const dx = x - startX
-      if (dx > 40) setCarrilSeguro(carrilRef.current + 1)
-      else if (dx < -40) setCarrilSeguro(carrilRef.current - 1)
-    }
-
     const arena = document.getElementById('dodge-arena-touch')
     if (!arena) return
-
-    const ts = (e: TouchEvent) => onStart(e.changedTouches[0].clientX)
-    const te = (e: TouchEvent) => onEnd(e.changedTouches[0].clientX)
-    arena.addEventListener('touchstart', ts, { passive: true })
-    arena.addEventListener('touchend', te, { passive: true })
-    return () => {
-      arena.removeEventListener('touchstart', ts)
-      arena.removeEventListener('touchend', te)
+    const ts = (e: TouchEvent) => { startX = e.changedTouches[0].clientX }
+    const te = (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - startX
+      if (dx > 40)       setCarrilSeguro(carrilRef.current + 1)
+      else if (dx < -40) setCarrilSeguro(carrilRef.current - 1)
     }
+    arena.addEventListener('touchstart', ts, { passive: true })
+    arena.addEventListener('touchend',   te, { passive: true })
+    return () => { arena.removeEventListener('touchstart', ts); arena.removeEventListener('touchend', te) }
   }, [setCarrilSeguro])
 
+
   useEffect(() => {
-    emitSync()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !terminadoRef.current) {
+        emitSync()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [emitSync])
 
-  const eliminado = vidas <= 0
+  useEffect(() => { emitSync() }, [emitSync])
 
-  const timerClass =
-    segundos > 15 ? 'dodge-timer--ok' : segundos > 5 ? 'dodge-timer--warn' : 'dodge-timer--danger'
+  const eliminado   = vidas <= 0
+  const timerClass  = segundos > 15 ? 'dodge-timer--ok' : segundos > 5 ? 'dodge-timer--warn' : 'dodge-timer--danger'
 
   return (
     <div className="snap-screen dodge-game">
@@ -210,6 +212,13 @@ export default function DodgePage() {
       <main className="snap-content">
         <p className="dodge-game__mode">DODGE GAME</p>
         <p className={`dodge-timer ${timerClass}`}>{segundos}s</p>
+
+
+        {sensorOk === false && (
+          <p style={{ color: '#ff8c1a', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.4rem' }}>
+            ⚠️ Sensor no disponible — usa los botones ◀ ▶ o desliza
+          </p>
+        )}
 
         <div className="dodge-stats">
           <div>
@@ -232,14 +241,11 @@ export default function DodgePage() {
             ))}
           </div>
 
-          {obstaculos.map((o) => (
+          {obstaculos.map(o => (
             <div
               key={o.id}
               className="dodge-obstacle-fall"
-              style={{
-                left: `${laneToPercent(o.lane)}%`,
-                top: `${o.y}%`,
-              }}
+              style={{ left: `${laneToPercent(o.lane)}%`, top: `${o.y}%` }}
               aria-hidden
             />
           ))}
@@ -247,12 +253,10 @@ export default function DodgePage() {
           <div
             className={`dodge-player-arrow ${parpadeo ? 'dodge-player--blink' : ''} ${eliminado ? 'dodge-player--dead' : ''}`}
             style={{ left: `${laneToPercent(carril)}%` }}
-          >
-            ▲
-          </div>
+          >▲</div>
 
           {eliminado && (
-            <div className="dodge-dead-overlay" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', zIndex: 10, borderRadius: 'inherit' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', zIndex: 10, borderRadius: 'inherit' }}>
               <span style={{ fontSize: '2rem' }}>💀</span>
               <p style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem', margin: '0.25rem 0 0' }}>ELIMINADO</p>
             </div>
@@ -260,12 +264,8 @@ export default function DodgePage() {
         </div>
 
         <div className="dodge-controls">
-          <button type="button" aria-label="Izquierda" onClick={() => setCarrilSeguro(carril - 1)}>
-            ◀
-          </button>
-          <button type="button" aria-label="Derecha" onClick={() => setCarrilSeguro(carril + 1)}>
-            ▶
-          </button>
+          <button type="button" aria-label="Izquierda" onClick={() => setCarrilSeguro(carril - 1)}>◀</button>
+          <button type="button" aria-label="Derecha"   onClick={() => setCarrilSeguro(carril + 1)}>▶</button>
         </div>
 
         <p className="dodge-hint">Desliza, inclina el celular o usa ◀ ▶</p>
