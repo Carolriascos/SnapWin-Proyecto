@@ -142,13 +142,15 @@ export default function ShakeLivePage() {
     socket.on("players-update", (jugadores: any[]) => {
       setScores(prev => {
         const next: Record<string, JugadorScore> = {}
-        jugadores.forEach((j, index) => {
+        let playerIndex = 0
+        jugadores.forEach((j) => {
           if (j.id === 'mall-screen' || j.id === 'admin-panel') return
           next[j.id] = {
             nombre: j.nombre || "Jugador",
-            color:  getPlayerColor(index),
+            color:  j.color || prev[j.id]?.color || getPlayerColor(playerIndex),
             puntos: prev[j.id]?.puntos ?? 0,
           }
+          playerIndex += 1
         })
         scoresRef.current = next
         return next
@@ -264,9 +266,9 @@ export default function ShakeLivePage() {
                   position:   'absolute',
                   left:       `${dot.x}px`,
                   top:        `${dot.y}px`,
-                  background: dot.color,
+                  '--dot-color': dot.color,
                   transform:  'translate(-50%, -50%)',
-                }}
+                } as React.CSSProperties}
               />
             ))}
           </div>

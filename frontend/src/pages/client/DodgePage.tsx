@@ -101,13 +101,16 @@ export default function DodgePage() {
   const startSensors = useCallback(async () => {
     sensorRef.current?.stop()
     sensorActiveRef.current = false
-    const sensor = createTiltSensor({
-      onTilt: (dir) => setCarrilSeguro(carrilRef.current + dir),
-      onStatus: (status) => {
-        setSensorStatus(status)
-        sensorActiveRef.current = status === 'active'
+    const sensor = createTiltSensor(
+      {
+        onLane: (lane) => setCarrilSeguro(lane),
+        onStatus: (status) => {
+          setSensorStatus(status)
+          sensorActiveRef.current = status === 'active'
+        },
       },
-    })
+      { laneCount: LANES },
+    )
     sensorRef.current = sensor
     await sensor.start()
   }, [setCarrilSeguro])

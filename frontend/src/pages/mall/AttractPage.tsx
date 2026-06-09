@@ -37,7 +37,7 @@ export default function AttractPage() {
       <MallHeader />
 
       <div className="mall-attract__grid">
-        <div>
+        <div className="mall-attract__content">
           <h2 className="mall-attract__title">
             ¡ESCANÉAME Y
             <span>JUEGA GRATIS!</span>
@@ -47,7 +47,7 @@ export default function AttractPage() {
             <span className="mall-attract__tag mall-attract__tag--dodge">DODGE GAME</span>
           </div>
           <p className="mall-attract__wifi-hint">
-            Escanea y elige tu juego en el celular · misma Wi‑Fi
+            Escanea y elige tu juego en el celular
           </p>
         </div>
 
@@ -63,7 +63,7 @@ export default function AttractPage() {
             <>
               <br />
               <span className="mall-attract__warn">
-                Pon en frontend/.env: VITE_FRONTEND_URL=http://TU_IP:5173 (la IP Network de Vite)
+                Configura VITE_FRONTEND_URL en Vercel con la URL pública del frontend (ej. https://tu-app.vercel.app)
               </span>
             </>
           )}

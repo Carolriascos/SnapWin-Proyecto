@@ -1,5 +1,8 @@
 import { Server } from "socket.io";
+import { SupabaseClient } from "../clients/SupabaseClient";
 import ScoresRepository from "../routes/scores/scores.repository";
+import CouponsRepository from "../routes/coupons/coupons.repository";
+import { EmailService } from "../routes/email/email.service";
 
 export const setupSocket = (io: Server) => {
   const salas: Map<string, any[]> = new Map();
@@ -11,6 +14,46 @@ export const setupSocket = (io: Server) => {
   const salaCountdownIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   const esHumano = (jugador: any) => jugador?.id !== "mall-screen" && jugador?.id !== "admin-panel";
+
+  const enviarCuponesTop3 = async (
+    ranking: { jugadorId: string; nombre: string; puntos: number }[],
+  ) => {
+    const top3 = ranking.slice(0, 3);
+    for (let i = 0; i < top3.length; i++) {
+      const posicion = i + 1;
+      const jugador = top3[i];
+
+      try {
+        const existente = await CouponsRepository.getLatestCouponForPlayer(jugador.jugadorId);
+        let cupon = existente.success ? existente.data : null;
+
+        if (!cupon) {
+          const generado = await CouponsRepository.generateCoupon(jugador.jugadorId, posicion);
+          if (!generado.success || !generado.data) continue;
+          cupon = generado.data;
+        }
+
+        const { data: jugadorDb } = await SupabaseClient
+          .from("jugadores")
+          .select("correo, nombre")
+          .eq("id", jugador.jugadorId)
+          .maybeSingle();
+
+        const correo = jugadorDb?.correo?.trim();
+        if (!correo) continue;
+
+        await EmailService.sendCouponEmail({
+          to_email: correo,
+          nombre: jugadorDb?.nombre ?? jugador.nombre ?? "Jugador",
+          codigo: cupon.codigo,
+          nivel: cupon.nivel,
+          descuento: String(cupon.descuento),
+        });
+      } catch (e) {
+        console.error(`Error enviando cupón a ${jugador.jugadorId}:`, e);
+      }
+    }
+  };
 
   const emitirStatsDia = async (salaId = "sala-001") => {
     try {
@@ -136,6 +179,7 @@ export const setupSocket = (io: Server) => {
       const todosTerminaron = humanos.length > 0 && humanos.every((j) => terminados.has(j.id));
 
       if (todosTerminaron) {
+        void enviarCuponesTop3(rankingParcial);
         io.to(salaId).emit("ranking-partida", rankingParcial);
         io.to(salaId).emit("partida-finalizada", { ranking: rankingParcial });
         cancelCountdown(salaId);

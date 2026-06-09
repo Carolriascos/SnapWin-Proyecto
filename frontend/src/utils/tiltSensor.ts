@@ -1,5 +1,3 @@
-export type TiltDirection = -1 | 1
-
 export type SensorStatus =
   | 'idle'
   | 'pending_permission'
@@ -17,8 +15,12 @@ export interface SensorCapabilities {
   requiresUserGesture: boolean
 }
 
+export interface TiltSensorOptions {
+  laneCount?: number
+}
+
 export interface TiltSensorCallbacks {
-  onTilt: (dir: TiltDirection) => void
+  onLane: (lane: number) => void
   onStatus: (status: SensorStatus) => void
 }
 
@@ -28,13 +30,13 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG      = 0.9
-const LANE_THRESHOLD_DEG = 1.2
-const COOLDOWN_MS        = 35
-const SMOOTHING_ALPHA    = 0.75
-const CALIBRATION_COUNT  = 5
-const NO_DATA_TIMEOUT_MS = 3000
-const ORIENT_STALE_MS    = 500
+const DEG_PER_LANE         = 11
+const DEAD_ZONE_DEG        = 1.5
+const SMOOTHING_ALPHA      = 0.18
+const CALIBRATION_COUNT    = 12
+const MIN_LANE_CHANGE_MS   = 140
+const NO_DATA_TIMEOUT_MS   = 3000
+const ORIENT_STALE_MS      = 600
 
 type PermissionCtor = { requestPermission?: () => Promise<PermissionState | string> }
 
@@ -89,8 +91,7 @@ export function getSensorStatusMessage(status: SensorStatus): string | null {
 function screenAngle(): number {
   if (typeof window === 'undefined') return 0
   if (screen.orientation?.angle != null) {
-    const a = screen.orientation.angle
-    return ((a % 360) + 360) % 360
+    return ((screen.orientation.angle % 360) + 360) % 360
   }
   const o = window.orientation
   if (typeof o === 'number') return ((o % 360) + 360) % 360
@@ -103,9 +104,8 @@ function isPortraitLayout(): boolean {
 }
 
 /**
- * Extrae inclinación lateral en grados, normalizada a la pantalla.
- * Positivo = inclinar a la DERECHA, negativo = inclinar a la IZQUIERDA.
- * Usa matchMedia para portrait/landscape (más fiable que solo screen.angle).
+ * Inclinación lateral en grados respecto a la pantalla.
+ * Positivo = inclinar hacia la DERECHA, negativo = hacia la IZQUIERDA.
  */
 function getOrientationTiltDegrees(e: DeviceOrientationEvent): number | null {
   if (e.beta == null || e.gamma == null) return null
@@ -116,23 +116,16 @@ function getOrientationTiltDegrees(e: DeviceOrientationEvent): number | null {
 
   let tilt: number
   if (portrait) {
-    // En portrait, gamma es el eje izquierda/derecha (W3C).
     tilt = e.gamma
     if (angle === 180) tilt = -tilt
   } else {
-    // En landscape, beta es el eje lateral.
     tilt = e.beta
-    if (angle === 270) tilt = -tilt
-    else if (angle === 90) tilt = -tilt
+    if (angle === 90 || angle === 270) tilt = -tilt
   }
 
-  // Negar para alinear con la dirección visual del juego en navegadores móviles.
-  return -tilt
+  return tilt
 }
 
-/**
- * Fallback con acelerómetro: misma convención que orientation.
- */
 function getMotionTiltDegrees(e: DeviceMotionEvent): number | null {
   const g = e.accelerationIncludingGravity
   if (!g || g.x == null || g.y == null || g.z == null) return null
@@ -151,12 +144,10 @@ function getMotionTiltDegrees(e: DeviceMotionEvent): number | null {
   } else {
     lateral = g.y
     vertical = Math.hypot(g.x, g.z)
-    if (angle === 270) lateral = -lateral
-    else if (angle === 90) lateral = -lateral
+    if (angle === 90 || angle === 270) lateral = -lateral
   }
 
-  const deg = (Math.atan2(lateral, vertical || 1) * 180) / Math.PI
-  return -deg
+  return (Math.atan2(lateral, vertical || 1) * 180) / Math.PI
 }
 
 async function requestSensorPermission(
@@ -171,8 +162,17 @@ async function requestSensorPermission(
   }
 }
 
-export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHandle {
+function clampLane(lane: number, laneCount: number): number {
+  return Math.min(laneCount - 1, Math.max(0, lane))
+}
+
+export function createTiltSensor(
+  callbacks: TiltSensorCallbacks,
+  options: TiltSensorOptions = {},
+): TiltSensorHandle {
   const caps = getSensorCapabilities()
+  const laneCount = options.laneCount ?? 4
+  const centerLane = (laneCount - 1) / 2
 
   let status: SensorStatus = 'idle'
   let orientHandler: ((e: DeviceOrientationEvent) => void) | null = null
@@ -184,11 +184,12 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
   let orientSamples: number[] = []
 
   let calibrationBuf: number[] = []
-  let neutralTilt   = 0
-  let calibrated    = false
-  let smoothedTilt  = 0
-  let armed         = true
-  let lastChangeTime = 0
+  let neutralTilt    = 0
+  let calibrated     = false
+  let smoothedTilt   = 0
+  let currentLane    = Math.round(centerLane)
+  let lastLaneEmit   = currentLane
+  let lastLaneTime   = 0
 
   const setStatus = (next: SensorStatus) => {
     if (status === next) return
@@ -216,10 +217,21 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
   }
 
   const checkOrientUseless = () => {
-    if (orientSamples.length < 8) return
+    if (orientSamples.length < 10) return
     const min = Math.min(...orientSamples)
     const max = Math.max(...orientSamples)
-    if (max - min < 1.5) orientDisabled = true
+    if (max - min < 1.2) orientDisabled = true
+  }
+
+  const emitLaneIfChanged = (lane: number) => {
+    const clamped = clampLane(lane, laneCount)
+    const now = Date.now()
+    if (clamped === lastLaneEmit) return
+    if (now - lastLaneTime < MIN_LANE_CHANGE_MS) return
+    lastLaneEmit = clamped
+    lastLaneTime = now
+    currentLane = clamped
+    callbacks.onLane(clamped)
   }
 
   const processTiltSample = (raw: number) => {
@@ -233,32 +245,30 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         smoothedTilt = neutralTilt
         calibrated   = true
         calibrationBuf = []
+        currentLane  = Math.round(centerLane)
+        lastLaneEmit = currentLane
       }
       return
     }
 
     smoothedTilt = smoothedTilt + SMOOTHING_ALPHA * (raw - smoothedTilt)
     const relative = smoothedTilt - neutralTilt
-    const now = Date.now()
 
-    if (!armed) {
-      if (Math.abs(relative) < DEAD_ZONE_DEG) armed = true
-      return
-    }
+    if (Math.abs(relative) < DEAD_ZONE_DEG) return
 
-    if (now - lastChangeTime < COOLDOWN_MS) return
+    const idealLane = centerLane + relative / DEG_PER_LANE
+    const targetLane = clampLane(Math.round(idealLane), laneCount)
 
-    // relative > 0 → inclinación a la derecha → carril +
-    // relative < 0 → inclinación a la izquierda → carril -
-    if (relative > LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(1)
-      lastChangeTime = now
-      armed = false
-    } else if (relative < -LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(-1)
-      lastChangeTime = now
-      armed = false
-    }
+    if (targetLane === currentLane) return
+
+    const boundary = (targetLane + currentLane) / 2
+    const boundaryTilt = (boundary - centerLane) * DEG_PER_LANE
+    const crossed =
+      targetLane > currentLane
+        ? relative >= boundaryTilt
+        : relative <= boundaryTilt
+
+    if (crossed) emitLaneIfChanged(targetLane)
   }
 
   const attachListeners = (useOrientation: boolean, useMotion: boolean) => {
@@ -273,7 +283,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         if (tilt == null) return
 
         orientSamples.push(tilt)
-        if (orientSamples.length > 20) orientSamples.shift()
+        if (orientSamples.length > 24) orientSamples.shift()
         checkOrientUseless()
         if (orientDisabled) return
 
@@ -310,8 +320,9 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
     neutralTilt    = 0
     calibrated     = false
     smoothedTilt   = 0
-    armed          = true
-    lastChangeTime = 0
+    currentLane    = Math.round(centerLane)
+    lastLaneEmit   = currentLane
+    lastLaneTime   = 0
     orientDisabled = false
     orientSamples  = []
     lastOrientAt   = 0

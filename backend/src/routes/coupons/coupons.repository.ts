@@ -43,10 +43,44 @@ const mapJuegoNombre = (juego: string | undefined): string => {
   return juego;
 };
 
+const getLatestCouponForPlayer = async (jugadorId: string): Promise<ApiResponse<Coupon | null>> => {
+  const { data, error } = await SupabaseClient
+    .from("cupones")
+    .select("*")
+    .eq("jugador_id", jugadorId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error al buscar cupón del jugador:", error);
+    return { success: false, error: error.message };
+  }
+
+  if (!data) return { success: true, data: null };
+
+  return {
+    success: true,
+    data: {
+      codigo: data.codigo,
+      jugadorId: data.jugador_id,
+      nivel: data.nivel,
+      descuento: data.descuento,
+      canjeado: data.canjeado,
+      expiresAt: data.expires_at,
+    },
+  };
+};
+
 const generateCoupon = async (jugadorId: string, posicion: number): Promise<ApiResponse<Coupon>> => {
   const prize = PRIZES[posicion];
   if (!prize) {
     return { success: false, error: "Posición inválida para generar cupón" };
+  }
+
+  const existente = await getLatestCouponForPlayer(jugadorId);
+  if (existente.success && existente.data) {
+    return { success: true, data: existente.data };
   }
 
   const now = new Date();
@@ -301,4 +335,11 @@ const listCoupons = async (): Promise<ApiResponse<{ cupones: any[]; stats: { tot
   return { success: true, data: { cupones, stats } };
 };
 
-export default { generateCoupon, validateCoupon, redeemCoupon, redeemCouponPlayer, listCoupons };
+export default {
+  generateCoupon,
+  validateCoupon,
+  redeemCoupon,
+  redeemCouponPlayer,
+  listCoupons,
+  getLatestCouponForPlayer,
+};

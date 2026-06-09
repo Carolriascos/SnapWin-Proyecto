@@ -28,6 +28,8 @@
    | `SUPABASE_URL` | `https://htcrblffobywcprjxiyi.supabase.co` |
    | `SUPABASE_ANON_KEY` | Tu clave anon real (Supabase → Project Settings → API) |
    | `NODE_ENV` | `production` |
+   | `BREVO_API_KEY` | API key de Brevo (envío de cupones por correo) |
+   | `BREVO_SENDER_EMAIL` | Correo remitente verificado en Brevo |
 
    > **No hace falta** definir `PORT` manualmente: Render inyecta `PORT` y el backend ya usa `process.env.PORT`.
 
@@ -53,15 +55,7 @@
    | Variable | Valor |
    |----------|--------|
    | `VITE_BACKEND_URL` | URL de Render **sin** barra final, ej. `https://snap-win.onrender.com` |
-
-   Opcional (cupones por email):
-
-   | Variable | Descripción |
-   |----------|-------------|
-   | `VITE_EMAILJS_SERVICE_ID` | EmailJS |
-   | `VITE_EMAILJS_TEMPLATE_ID` | EmailJS |
-   | `VITE_EMAILJS_PUBLIC_KEY` | EmailJS |
-   | `VITE_FRONTEND_URL` | URL de Vercel (QR / pantalla mall) |
+   | `VITE_FRONTEND_URL` | URL de Vercel para el QR del mall, ej. `https://tu-app.vercel.app` |
 
 5. **Deploy**
 6. URL pública: `https://tu-proyecto.vercel.app` → esta va en el README.

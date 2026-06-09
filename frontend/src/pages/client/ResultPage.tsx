@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Coupon } from '../../types'
 import SnapHeader from '../../components/SnapHeader'
@@ -43,6 +43,8 @@ export default function ResultPage() {
   const [cupon,      setCupon]      = useState<Coupon | null>(null)
   const [esperando,  setEsperando]  = useState(true)
   const [generando,  setGenerando]  = useState(false)
+  const generandoRef = useRef(false)
+  const cuponRef     = useRef<Coupon | null>(null)
   const [canjeando,  setCanjeando]  = useState(false)
   const [canjeado,   setCanjeado]   = useState(false)
   const [errorCanje, setErrorCanje] = useState('')
@@ -70,21 +72,26 @@ export default function ResultPage() {
       setRanking(data)
       setEsperando(false)
       const posicion = data.findIndex(j => j.jugadorId === jugadorId) + 1
-      if (posicion >= 1 && posicion <= 3 && !cupon && !generando) {
-        setGenerando(true)
-        try {
-          const res = await fetch(`${API_BASE}/coupons/generate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jugadorId, posicion }),
-          })
-          const cd = await res.json()
-          if (cd.success) {
-            setCupon(cd.data)
-            await enviarCuponPorCorreo(cd.data)  // ✅ llama al backend
-            socket.emit('cupon-generado', { salaId, codigo: cd.data.codigo })
-          }
-        } catch (e) { console.error('Error generando cupón:', e) }
-        finally { setGenerando(false) }
+      if (posicion < 1 || posicion > 3 || cuponRef.current || generandoRef.current) return
+
+      generandoRef.current = true
+      setGenerando(true)
+      try {
+        const res = await fetch(`${API_BASE}/coupons/generate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jugadorId, posicion }),
+        })
+        const cd = await res.json()
+        if (cd.success && cd.data) {
+          cuponRef.current = cd.data
+          setCupon(cd.data)
+          await enviarCuponPorCorreo(cd.data)
+          socket.emit('cupon-generado', { salaId, codigo: cd.data.codigo })
+        }
+      } catch (e) { console.error('Error generando cupón:', e) }
+      finally {
+        generandoRef.current = false
+        setGenerando(false)
       }
     }
     socket.on('ranking-partida', procesarRanking)
@@ -94,7 +101,7 @@ export default function ResultPage() {
       socket.off('partida-finalizada')
       socket.off('round-reset')
     }
-  }, [socket, jugadorId, cupon, generando, salaId, navigate])
+  }, [socket, jugadorId, salaId, navigate])
 
   const handleCanjear = async () => {
     if (!cupon || canjeado || canjeando) return
