@@ -13,8 +13,7 @@ const DOT_DIAMETER_PX = 22
 const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
 const MIN_DIST_PX     = DOT_DIAMETER_PX + 2
 const MAX_ATTEMPTS    = 150
-const MAX_DOTS_PER_EVENT = 8
-const MAX_BOARD_DOTS     = 450
+const MAX_DOTS_PER_EVENT = 10
 
 interface BoardDot {
   id: string
@@ -39,7 +38,10 @@ function findFreePosition(
     })
     if (!overlaps) return { x, y }
   }
-  return null
+  return {
+    x: margin + Math.random() * (boardW - margin * 2),
+    y: margin + Math.random() * (boardH - margin * 2),
+  }
 }
 
 function dotsForForce(fuerza: number): number {
@@ -90,9 +92,8 @@ export default function ShakeLivePage() {
           y: pos.y,
         })
       }
-      const trimmed = next.slice(-MAX_BOARD_DOTS)
-      dotsRef.current = trimmed
-      return trimmed
+      dotsRef.current = next
+      return next
     })
   }, [])
 

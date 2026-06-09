@@ -142,6 +142,10 @@ export const setupSocket = (io: Server) => {
         salaCountdownStarted.delete(salaId);
         salaAdminWantsStart.delete(salaId);
         setTimeout(() => emitirStatsDia(salaId), 500);
+        setTimeout(() => {
+          resetSala(salaId);
+          salaAdminWantsStart.set(salaId, true);
+        }, 15_000);
       } else {
         io.to(salaId).emit("ranking-parcial", rankingParcial);
       }
