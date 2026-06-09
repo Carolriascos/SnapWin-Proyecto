@@ -13,6 +13,8 @@ const DOT_DIAMETER_PX = 22
 const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
 const MIN_DIST_PX     = DOT_DIAMETER_PX + 2
 const MAX_ATTEMPTS    = 150
+const MAX_DOTS_PER_EVENT = 8
+const MAX_BOARD_DOTS     = 450
 
 interface BoardDot {
   id: string
@@ -20,7 +22,6 @@ interface BoardDot {
   x: number   
   y: number   
 }
-
 
 function findFreePosition(
   existing: BoardDot[],
@@ -41,6 +42,10 @@ function findFreePosition(
   return null
 }
 
+function dotsForForce(fuerza: number): number {
+  return Math.max(1, Math.min(MAX_DOTS_PER_EVENT, Math.round(Math.abs(fuerza) / 6)))
+}
+
 export default function ShakeLivePage() {
   const socket   = useSocket()
   const navigate = useNavigate()
@@ -55,28 +60,39 @@ export default function ShakeLivePage() {
   const boardRef       = useRef<HTMLDivElement>(null)
   const rankingRef     = useRef<any[]>([])
 
-
   useEffect(() => { scoresRef.current = scores }, [scores])
   useEffect(() => { dotsRef.current   = dots   }, [dots])
 
-  const addDot = useCallback((color: string) => {
+  const resetLiveState = useCallback(() => {
+    setScores({})
+    setDots([])
+    setCountdown(null)
+    dotsRef.current = []
+    scoresRef.current = {}
+    rankingRef.current = []
+  }, [])
+
+  const addDots = useCallback((color: string, amount: number) => {
+    if (amount <= 0) return
     const board  = boardRef.current
     const boardW = board?.clientWidth  ?? 800
     const boardH = board?.clientHeight ?? 260
 
-    const pos = findFreePosition(dotsRef.current, boardW, boardH)
-    if (!pos) return 
-
-    const newDot: BoardDot = {
-      id:    `${color}-${Date.now()}-${Math.random()}`,
-      color,
-      x: pos.x,
-      y: pos.y,
-    }
     setDots(prev => {
-      const next = [...prev, newDot]
-      dotsRef.current = next
-      return next
+      const next = [...prev]
+      for (let i = 0; i < amount; i++) {
+        const pos = findFreePosition(next, boardW, boardH)
+        if (!pos) break
+        next.push({
+          id: `${color}-${Date.now()}-${Math.random()}-${i}`,
+          color,
+          x: pos.x,
+          y: pos.y,
+        })
+      }
+      const trimmed = next.slice(-MAX_BOARD_DOTS)
+      dotsRef.current = trimmed
+      return trimmed
     })
   }, [])
 
@@ -94,7 +110,7 @@ export default function ShakeLivePage() {
       setScores(prev => {
         const next: Record<string, JugadorScore> = {}
         jugadores.forEach(j => {
-          if (j.id === 'mall-screen') return
+          if (j.id === 'mall-screen' || j.id === 'admin-panel') return
           next[j.id] = {
             nombre: j.nombre || "Jugador",
             color:  j.color  || "#888",
@@ -107,9 +123,11 @@ export default function ShakeLivePage() {
     })
 
     socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
+      let color = "#888"
       setScores(prev => {
         if (!prev[jugadorId]) return prev
         const nuevoPuntaje = (prev[jugadorId].puntos ?? 0) + Math.round(fuerza)
+        color = prev[jugadorId].color ?? color
         const next = {
           ...prev,
           [jugadorId]: { ...prev[jugadorId], puntos: nuevoPuntaje }
@@ -118,8 +136,7 @@ export default function ShakeLivePage() {
         return next
       })
 
-      const color = scoresRef.current[jugadorId]?.color ?? "#888"
-      addDot(color)
+      addDots(color, dotsForForce(fuerza))
     })
 
     socket.on("countdown", ({ count }: { count: number }) => setCountdown(count))
@@ -135,10 +152,12 @@ export default function ShakeLivePage() {
       })
       setDots([])
       dotsRef.current = []
+      rankingRef.current = []
       setCountdown(null)
     })
 
-    socket.on("player-finished", () => {
+    socket.on("partida-finalizada", ({ ranking }: { ranking: any[] }) => {
+      if (ranking?.length) rankingRef.current = ranking
       setTimeout(() => navigate("/mall/results", { state: { ranking: rankingRef.current } }), 4000)
     })
 
@@ -146,13 +165,13 @@ export default function ShakeLivePage() {
       if (ranking.length > 0) {
         rankingRef.current = ranking
       } else {
-        setScores({})
-        setDots([])
-        dotsRef.current   = []
-        scoresRef.current = {}
-        rankingRef.current = []
-        setCountdown(null)
+        resetLiveState()
       }
+    })
+
+    socket.on("round-reset", () => {
+      resetLiveState()
+      navigate('/mall/waiting')
     })
 
     return () => {
@@ -161,10 +180,11 @@ export default function ShakeLivePage() {
       socket.off("score-update")
       socket.off("countdown")
       socket.off("game-start")
-      socket.off("player-finished")
+      socket.off("partida-finalizada")
       socket.off("ranking-partida")
+      socket.off("round-reset")
     }
-  }, [socket, navigate, addDot])
+  }, [socket, navigate, addDots, resetLiveState])
 
   const ordenados = Object.entries(scores)
     .filter(([id]) => id !== 'mall-screen')

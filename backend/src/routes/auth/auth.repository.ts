@@ -1,14 +1,17 @@
 import { SupabaseClient } from "../../clients/SupabaseClient";
 import { RegisterPayload, ApiResponse } from "../../types/types";
 
-const createJugador = async (payload: RegisterPayload): Promise<ApiResponse<{ jugadorId: string; color: string }>> => {
-  const COLORES = ["#7c3aed", "#16a34a", "#ea580c", "#db2777"];
+const buildPlayerColor = (index: number) => {
+  const hue = Math.round((index * 137.508) % 360);
+  return `hsl(${hue}, 82%, 58%)`;
+};
 
+const createJugador = async (payload: RegisterPayload): Promise<ApiResponse<{ jugadorId: string; color: string }>> => {
   const { count } = await SupabaseClient.from("jugadores")
     .select("*", { count: "exact", head: true })
     .eq("sala_id", payload.salaId);
 
-  const color = COLORES[(count ?? 0) % COLORES.length];
+  const color = buildPlayerColor(count ?? 0);
 
   const { data, error } = await SupabaseClient.from("jugadores")
     .insert({

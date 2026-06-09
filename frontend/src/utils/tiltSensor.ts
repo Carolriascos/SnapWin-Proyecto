@@ -28,13 +28,14 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG      = 1.5 
-const LANE_THRESHOLD_DEG = 2.5  
-const COOLDOWN_MS        = 75   
-const SMOOTHING_ALPHA    = 0.88 
-const CALIBRATION_COUNT  = 4    
+const DEAD_ZONE_DEG      = 1.2
+const LANE_THRESHOLD_DEG = 2.1
+const COOLDOWN_MS        = 60
+const SMOOTHING_ALPHA    = 0.82
+const CALIBRATION_COUNT  = 6
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
+const HORIZONTAL_SIGN    = -1
 
 type PermissionCtor = { requestPermission?: () => Promise<PermissionState | string> }
 
@@ -103,13 +104,13 @@ function tiltFromGravity(ax: number, ay: number, az: number): number {
 
 function normalizeOrientationTilt(e: DeviceOrientationEvent): number | null {
   if (e.gamma == null || !Number.isFinite(e.gamma)) return null
-  return e.gamma
+  return e.gamma * HORIZONTAL_SIGN
 }
 
 function normalizeMotionTilt(e: DeviceMotionEvent): number | null {
   const g = e.accelerationIncludingGravity
   if (!g || g.x == null || g.y == null || g.z == null) return null
-  return tiltFromGravity(g.x, g.y, g.z)
+  return tiltFromGravity(g.x, g.y, g.z) * HORIZONTAL_SIGN
 }
 
 async function requestSensorPermission(

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket } from '../../hooks/useSocket'
 import { useNavigate } from 'react-router-dom'
 import MallHeader from '../../components/MallHeader'
@@ -39,11 +39,16 @@ export default function DodgeLivePage() {
   const [countdown,  setCountdown]  = useState<number | null>(null)
   const [gameOver,   setGameOver]   = useState(false)
 
-  const jugadoresRef = useRef<Record<string, JugadorDodge>>({})
   const idRef        = useRef(0)
   const rankingRef   = useRef<{ jugadorId: string; nombre: string; puntos: number; color: string }[]>([])
 
-  useEffect(() => { jugadoresRef.current = jugadores }, [jugadores])
+  const resetLiveState = useCallback(() => {
+    setJugadores({})
+    setObstaculos([])
+    setCountdown(null)
+    setGameOver(false)
+    rankingRef.current = []
+  }, [])
 
   useEffect(() => {
     const emitJoin = () => {
@@ -57,18 +62,16 @@ export default function DodgeLivePage() {
 
     socket.on('players-update', (data: any[]) => {
       setJugadores(prev => {
-        const next = { ...prev }
+        const next: Record<string, JugadorDodge> = {}
         data.forEach(j => {
-          if (j.id === 'mall-screen') return
-          if (!next[j.id]) {
-            next[j.id] = {
-              nombre:    j.nombre || 'Jugador',
-              color:     j.color  || '#7c3aed',
-              carril:    1,
-              vidas:     VIDAS_INICIAL,
-              puntos:    0,
-              eliminado: false,  
-            }
+          if (j.id === 'mall-screen' || j.id === 'admin-panel') return
+          next[j.id] = {
+            nombre:    j.nombre || prev[j.id]?.nombre || 'Jugador',
+            color:     j.color  || prev[j.id]?.color  || '#7c3aed',
+            carril:    prev[j.id]?.carril ?? 1,
+            vidas:     prev[j.id]?.vidas ?? VIDAS_INICIAL,
+            puntos:    prev[j.id]?.puntos ?? 0,
+            eliminado: prev[j.id]?.eliminado ?? false,
           }
         })
         return next
@@ -85,12 +88,30 @@ export default function DodgeLivePage() {
       })
     })
 
+    socket.on('dodge-player-state', ({ jugadorId, carril, vidas, puntos, eliminado }: any) => {
+      setJugadores(prev => {
+        if (!prev[jugadorId]) return prev
+        const lane = typeof carril === 'number' ? Math.min(LANES - 1, Math.max(0, carril)) : prev[jugadorId].carril
+        return {
+          ...prev,
+          [jugadorId]: {
+            ...prev[jugadorId],
+            carril: lane,
+            vidas: typeof vidas === 'number' ? Math.max(0, vidas) : prev[jugadorId].vidas,
+            puntos: typeof puntos === 'number' ? puntos : prev[jugadorId].puntos,
+            eliminado: Boolean(eliminado ?? prev[jugadorId].eliminado),
+          },
+        }
+      })
+    })
+
     socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
 
     socket.on('game-start', () => {
       setCountdown(null)
       setGameOver(false)
       setObstaculos([])
+      rankingRef.current = []
       setJugadores(prev => {
         const next = { ...prev }
         Object.keys(next).forEach(id => {
@@ -100,7 +121,8 @@ export default function DodgeLivePage() {
       })
     })
 
-    socket.on('player-finished', () => {
+    socket.on('partida-finalizada', ({ ranking }: { ranking: any[] }) => {
+      if (ranking?.length) rankingRef.current = ranking
       setGameOver(true)
       setTimeout(() => {
         navigate('/mall/results', { state: { ranking: rankingRef.current, game: 'dodge' } })
@@ -108,19 +130,30 @@ export default function DodgeLivePage() {
     })
 
     socket.on('ranking-partida', (ranking: any[]) => {
-      if (ranking.length > 0) rankingRef.current = ranking
+      if (ranking.length > 0) {
+        rankingRef.current = ranking
+      } else {
+        resetLiveState()
+      }
+    })
+
+    socket.on('round-reset', () => {
+      resetLiveState()
+      navigate('/mall/waiting')
     })
 
     return () => {
       socket.off('connect', emitJoin)
       socket.off('players-update')
       socket.off('dodge-update')
+      socket.off('dodge-player-state')
       socket.off('countdown')
       socket.off('game-start')
-      socket.off('player-finished')
+      socket.off('partida-finalizada')
       socket.off('ranking-partida')
+      socket.off('round-reset')
     }
-  }, [socket, navigate])
+  }, [socket, navigate, resetLiveState])
 
   useEffect(() => {
     const spawnId = setInterval(() => {
@@ -134,45 +167,6 @@ export default function DodgeLivePage() {
     const tickId = setInterval(() => {
       if (gameOver) return
       setObstaculos(prev => {
-        const jug = jugadoresRef.current
-
-      
-        const dañosPorJugador: Record<string, number> = {}
-
-        prev.forEach(o => {
-          if (o.y < 72 || o.y > 92) return
-          Object.entries(jugadoresRef.current).forEach(([id, j]) => {
-            if (j.eliminado) return
-            if (j.carril !== o.lane) return
-            if (o.hitIds.has(id)) return       
-            o.hitIds.add(id)                   
-            dañosPorJugador[id] = (dañosPorJugador[id] ?? 0) + 1
-          })
-        })
-
-        if (Object.keys(dañosPorJugador).length > 0) {
-          setJugadores(jugPrev => {
-            const next = { ...jugPrev }
-            Object.entries(dañosPorJugador).forEach(([id, golpes]) => {
-              if (!next[id] || next[id].eliminado) return
-              const nuevasVidas = Math.max(0, next[id].vidas - golpes)
-              next[id] = { ...next[id], vidas: nuevasVidas, eliminado: nuevasVidas === 0 }
-            })
-            return next
-          })
-        }
-
-        const salieron = prev.filter(o => o.y >= 100)
-        if (salieron.length > 0) {
-          setJugadores(jugPrev => {
-            const next = { ...jugPrev }
-            Object.entries(next).forEach(([id, j]) => {
-              if (!j.eliminado) next[id] = { ...j, puntos: j.puntos + salieron.length * 100 }
-            })
-            return next
-          })
-        }
-
         return prev
           .map(o => ({ ...o, y: o.y + SPEED_PCT }))
           .filter(o => o.y < 105)

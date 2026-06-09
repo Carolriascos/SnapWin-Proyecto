@@ -10,6 +10,8 @@ export const setupSocket = (io: Server) => {
   const salaAdminWantsStart: Map<string, boolean> = new Map();
   const salaCountdownIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
+  const esHumano = (jugador: any) => jugador?.id !== "mall-screen" && jugador?.id !== "admin-panel";
+
   const emitirStatsDia = async (salaId = "sala-001") => {
     try {
       const res = await ScoresRepository.getStatsDia();
@@ -47,7 +49,7 @@ export const setupSocket = (io: Server) => {
 
   const tryStartLobby = (salaId: string) => {
     const jugadoresEnSala = salas.get(salaId) ?? [];
-    const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
+    const humanos = jugadoresEnSala.filter(esHumano).length;
     if (humanos < 2 || salaCountdownStarted.get(salaId)) return;
     if (salaAdminWantsStart.get(salaId)) startGame(salaId);
     else { salaCountdownStarted.set(salaId, true); startCountdown(salaId); }
@@ -79,9 +81,9 @@ export const setupSocket = (io: Server) => {
       socket.join(salaId);
 
       const jugadoresEnSala = salas.get(salaId) ?? [];
-      const humanosAntes = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
+      const humanosAntes = jugadoresEnSala.filter(esHumano).length;
 
-      if (jugador?.id !== "mall-screen" && jugador?.id !== "admin-panel" && humanosAntes === 0) {
+      if (esHumano(jugador) && humanosAntes === 0) {
         salaGameMode.set(salaId, modo);
       }
 
@@ -126,11 +128,11 @@ export const setupSocket = (io: Server) => {
       io.to(salaId).emit("player-finished", { jugadorId, puntos, nombre: jugador?.nombre ?? "Jugador", color: jugador?.color ?? "#888" });
 
       const rankingParcial = jugadoresEnSala
-        .filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel")
+        .filter(esHumano)
         .map((j) => ({ jugadorId: j.id, nombre: j.nombre ?? "Jugador", color: j.color ?? "#888", puntos: puntajes[j.id] ?? 0 }))
         .sort((a, b) => b.puntos - a.puntos);
 
-      const humanos = jugadoresEnSala.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
+      const humanos = jugadoresEnSala.filter(esHumano);
       const todosTerminaron = humanos.length > 0 && humanos.every((j) => terminados.has(j.id));
 
       if (todosTerminaron) {
@@ -148,24 +150,9 @@ export const setupSocket = (io: Server) => {
     socket.on("admin-start-round", (data: { salaId: string }) => {
       const salaId = data.salaId;
 
-      const jugadoresAntes = salas.get(salaId) ?? [];
-      const humanosAntes = jugadoresAntes.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
-
       resetSala(salaId);
-
-      if (humanosAntes.length >= 2) {
-        const jugadoresPost = salas.get(salaId) ?? [];
-        for (const h of humanosAntes) {
-          jugadoresPost.push(h);
-        }
-        salas.set(salaId, jugadoresPost);
-        io.to(salaId).emit("players-update", jugadoresPost);
-        startGame(salaId);
-        console.log(`Admin arrancó partida inmediata en ${salaId} con ${humanosAntes.length} jugadores`);
-      } else {
-        salaAdminWantsStart.set(salaId, true);
-        console.log(`Admin esperando jugadores en ${salaId} (${humanosAntes.length} conectados)`);
-      }
+      salaAdminWantsStart.set(salaId, true);
+      console.log(`Admin reinicio la sala ${salaId} y quedo esperando nuevos jugadores`);
     });
 
     socket.on("pedir-stats", async () => {
@@ -189,12 +176,13 @@ export const setupSocket = (io: Server) => {
       salas.forEach((jugadores, salaId) => {
         const actualizados = jugadores.filter((j) => j.socketId !== socket.id);
         salas.set(salaId, actualizados);
-        const humanosActuales = actualizados.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel").length;
+        const humanosActuales = actualizados.filter(esHumano).length;
         if (humanosActuales === 0) {
           cancelCountdown(salaId);
           salaGameMode.delete(salaId);
           salaCountdownStarted.delete(salaId);
           salaAdminWantsStart.delete(salaId);
+          salaPuntajes.set(salaId, {});
           salaTerminados.set(salaId, new Set());
         }
         io.to(salaId).emit("players-update", actualizados);
