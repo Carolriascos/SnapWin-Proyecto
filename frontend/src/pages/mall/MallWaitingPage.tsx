@@ -26,7 +26,6 @@ export default function MallWaitingPage() {
     else socket.on('connect', emitJoin)
 
     socket.on('players-update', (data: Jugador[]) => {
-      // s
       setJugadores(data.filter(j => !esNoJugador(j)))
     })
 
@@ -41,6 +40,14 @@ export default function MallWaitingPage() {
       setCountdown(null)
     })
 
+
+    socket.on('ranking-partida', (ranking: any[]) => {
+      if (ranking.length === 0) {
+        setJugadores([])
+        setCountdown(null)
+      }
+    })
+
     const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
 
     return () => {
@@ -49,6 +56,7 @@ export default function MallWaitingPage() {
       socket.off('countdown')
       socket.off('game-start')
       socket.off('round-reset')
+      socket.off('ranking-partida')
       cleanupRejoin?.()
     }
   }, [socket, navigate])

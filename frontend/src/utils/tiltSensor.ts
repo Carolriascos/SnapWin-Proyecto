@@ -28,10 +28,10 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG      = 2   
+const DEAD_ZONE_DEG      = 1.5 
 const LANE_THRESHOLD_DEG = 2.5  
-const COOLDOWN_MS        = 80   
-const SMOOTHING_ALPHA    = 0.85 
+const COOLDOWN_MS        = 75   
+const SMOOTHING_ALPHA    = 0.88 
 const CALIBRATION_COUNT  = 4    
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
@@ -98,7 +98,7 @@ function tiltFromGravity(ax: number, ay: number, az: number): number {
   else if (angle === 180)                  { gx = -ax; gy = -ay }
   else if (angle === 270 || angle === -90) { gx =  ay; gy = -ax }
   const denom = Math.sqrt(gy * gy + az * az) || 1
-  return -(Math.atan2(gx, denom) * 180) / Math.PI
+  return  (Math.atan2(gx, denom) * 180) / Math.PI
 }
 
 function normalizeOrientationTilt(e: DeviceOrientationEvent): number | null {
@@ -202,11 +202,11 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
     if (now - lastChangeTime < COOLDOWN_MS) return
 
     if (relative > LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(1)   // inclinar derecha → mover derecha
+      callbacks.onTilt(1)   
       lastChangeTime = now
       armed = false
     } else if (relative < -LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(-1)  // inclinar izquierda → mover izquierda
+      callbacks.onTilt(-1)  
       lastChangeTime = now
       armed = false
     }

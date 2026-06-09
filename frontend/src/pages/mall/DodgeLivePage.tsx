@@ -17,7 +17,7 @@ interface Obstaculo {
   id: number
   lane: number
   y: number
-  hitIds?: Set<string>
+  hitIds: Set<string>   
 }
 
 const LANES         = 4
@@ -136,15 +136,16 @@ export default function DodgeLivePage() {
       setObstaculos(prev => {
         const jug = jugadoresRef.current
 
+      
         const dañosPorJugador: Record<string, number> = {}
 
         prev.forEach(o => {
-          if (o.y < 72 || o.y > 92) return           // fuera de zona de impacto
+          if (o.y < 72 || o.y > 92) return
           Object.entries(jugadoresRef.current).forEach(([id, j]) => {
-            if (j.eliminado) return                   // ya eliminado
-            if (j.carril !== o.lane) return           // carril diferente
-            if (o.hitIds && o.hitIds.has(id)) return  // ya dañó a este jugador antes
-            if (o.hitIds) o.hitIds.add(id)
+            if (j.eliminado) return
+            if (j.carril !== o.lane) return
+            if (o.hitIds.has(id)) return       
+            o.hitIds.add(id)                   
             dañosPorJugador[id] = (dañosPorJugador[id] ?? 0) + 1
           })
         })
@@ -301,7 +302,7 @@ export default function DodgeLivePage() {
       {gameOver && rankingRef.current.length > 0 && (
         <div className="dodge-results-overlay">
           <div className="dodge-results-panel">
-            <h2 className="dodge-results-panel__title">🏆 RESULTADOS</h2>
+            <h2 className="dodge-results-panel__title">RESULTADOS</h2>
             <div className="dodge-results-podium">
               {[1, 0, 2].map((idx) => {
                 const j = rankingRef.current[idx]
