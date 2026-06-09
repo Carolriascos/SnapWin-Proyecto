@@ -27,14 +27,28 @@ export default function ResultsMallPage() {
   const [gameMode,   setGameMode]   = useState(initialGame)
 
   useEffect(() => {
-    socket.emit("join-sala", { salaId: "sala-001", jugador: { id: "mall-screen", nombre: "Mall" } })
+    const emitJoin = () => {
+      socket.emit("join-sala", { salaId: "sala-001", jugador: { id: "mall-screen", nombre: "Mall" } })
+    }
+    if (socket.connected) emitJoin()
+    else socket.on("connect", emitJoin)
+
     socket.on("ranking-partida", (ranking: JugadorResult[]) => {
       if (ranking.length === 0) { setResultados([]); return }
       setResultados(ranking)
     })
     socket.on("game-start", ({ game }: { game?: string }) => { if (game) setGameMode(game) })
-    return () => { socket.off("ranking-partida"); socket.off("game-start") }
-  }, [socket])
+    socket.on("round-reset", () => {
+      setResultados([])
+      navigate("/mall/waiting")
+    })
+    return () => {
+      socket.off("connect", emitJoin)
+      socket.off("ranking-partida")
+      socket.off("game-start")
+      socket.off("round-reset")
+    }
+  }, [socket, navigate])
 
   const ordenados   = [...resultados].sort((a, b) => b.puntos - a.puntos)
   const top3        = ordenados.slice(0, 3)

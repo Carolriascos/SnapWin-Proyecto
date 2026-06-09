@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useSocket } from '../../hooks/useSocket'
 import { useNavigate } from 'react-router-dom'
 import MallHeader from '../../components/MallHeader'
+import { rejoinOnResume } from '../../utils/sessionRejoin'
 import '../../styles/pages/mall/dodge-live.css'
+
+const MALL_JOIN = { salaId: 'sala-001', jugador: { id: 'mall-screen', nombre: 'Mall' } }
 
 interface JugadorDodge {
   nombre: string
@@ -32,14 +35,11 @@ export default function DodgeLivePage() {
   const rankingRef = useRef<{ jugadorId: string; nombre: string; puntos: number; color: string }[]>([])
 
   useEffect(() => {
-    const emitJoin = () => {
-      socket.emit('join-sala', {
-        salaId: 'sala-001',
-        jugador: { id: 'mall-screen', nombre: 'Mall' },
-      })
-    }
+    const emitJoin = () => socket.emit('join-sala', MALL_JOIN)
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
+
+    const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
 
     socket.on('players-update', (data: any[]) => {
       setJugadores(prev => {
@@ -122,7 +122,20 @@ export default function DodgeLivePage() {
     })
 
     socket.on('ranking-partida', (ranking: any[]) => {
-      if (ranking.length > 0) rankingRef.current = ranking
+      if (ranking.length === 0) {
+        rankingRef.current = []
+        setJugadores({})
+      } else {
+        rankingRef.current = ranking
+      }
+    })
+
+    socket.on('round-reset', () => {
+      setJugadores({})
+      setCountdown(null)
+      setGameOver(false)
+      rankingRef.current = []
+      navigate('/mall/waiting')
     })
 
     return () => {
@@ -133,6 +146,8 @@ export default function DodgeLivePage() {
       socket.off('game-start')
       socket.off('partida-finalizada')
       socket.off('ranking-partida')
+      socket.off('round-reset')
+      cleanupRejoin?.()
     }
   }, [socket, navigate])
 

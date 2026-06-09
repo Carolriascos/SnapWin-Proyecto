@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import { Jugador } from '../../types'
 import MallHeader from '../../components/MallHeader'
+import { rejoinOnResume } from '../../utils/sessionRejoin'
+
+const MALL_JOIN = { salaId: 'sala-001', jugador: { id: 'mall-screen', nombre: 'Mall' } }
 
 export default function MallWaitingPage() {
   const navigate  = useNavigate()
@@ -11,19 +14,13 @@ export default function MallWaitingPage() {
   const [countdown, setCountdown] = useState<number | null>(null)
 
   useEffect(() => {
-    const emitJoin = () => {
-      socket.emit('join-sala', {
-        salaId: 'sala-001',
-        jugador: { id: 'mall-screen', nombre: 'Mall' }
-      })
-    }
+    const emitJoin = () => socket.emit('join-sala', MALL_JOIN)
 
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
 
     socket.on('players-update', (data: Jugador[]) => {
-      const soloJugadores = data.filter(j => j.id !== 'mall-screen' && j.id !== 'admin-panel')
-      setJugadores(soloJugadores)
+      setJugadores(data)
     })
 
     socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
@@ -37,12 +34,15 @@ export default function MallWaitingPage() {
       setCountdown(null)
     })
 
+    const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
+
     return () => {
       socket.off('connect', emitJoin)
       socket.off('players-update')
       socket.off('countdown')
       socket.off('game-start')
       socket.off('round-reset')
+      cleanupRejoin?.()
     }
   }, [socket, navigate])
 

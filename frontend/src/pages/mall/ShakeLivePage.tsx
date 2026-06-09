@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSocket } from '../../hooks/useSocket';
 import { useNavigate } from 'react-router-dom';
 import MallHeader from '../../components/MallHeader';
+import { rejoinOnResume } from '../../utils/sessionRejoin';
+
+const MALL_JOIN = { salaId: 'sala-001', jugador: { id: 'mall-screen', nombre: 'Mall' } };
 
 interface JugadorScore {
   nombre: string;
@@ -81,14 +84,11 @@ export default function ShakeLivePage() {
   }, [])
 
   useEffect(() => {
-    const emitJoin = () => {
-      socket.emit('join-sala', {
-        salaId: 'sala-001',
-        jugador: { id: 'mall-screen', nombre: 'Mall' },
-      })
-    }
+    const emitJoin = () => socket.emit('join-sala', MALL_JOIN)
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
+
+    const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
 
     socket.on('players-update', (jugadores: any[]) => {
       setScores(prev => {
@@ -165,6 +165,12 @@ export default function ShakeLivePage() {
       else rankingRef.current = ranking
     })
 
+    socket.on('round-reset', () => {
+      resetBoard(true)
+      setCountdown(null)
+      navigate('/mall/waiting')
+    })
+
     return () => {
       socket.off('connect', emitJoin)
       socket.off('players-update')
@@ -173,6 +179,8 @@ export default function ShakeLivePage() {
       socket.off('game-start')
       socket.off('player-finished')
       socket.off('ranking-partida')
+      socket.off('round-reset')
+      cleanupRejoin?.()
     }
   }, [socket, navigate, resetBoard])
 

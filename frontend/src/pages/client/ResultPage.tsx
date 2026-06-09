@@ -45,8 +45,22 @@ export default function ResultPage() {
   const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
 
   useEffect(() => {
+    const resetEstado = () => {
+      setRanking([])
+      setCupon(null)
+      setEsperando(true)
+      setGenerando(false)
+      setCanjeado(false)
+      setErrorCanje('')
+    }
+
+    socket.on('round-reset', () => {
+      resetEstado()
+      navigate('/final-round')
+    })
+
     const procesarRanking = async (data: JugadorRanking[]) => {
-      if (data.length === 0) return
+      if (data.length === 0) { resetEstado(); return }
       setRanking(data)
       setEsperando(false)
       const posicion = data.findIndex(j => j.jugadorId === jugadorId) + 1
@@ -69,8 +83,12 @@ export default function ResultPage() {
     }
     socket.on('ranking-partida', procesarRanking)
     socket.on('partida-finalizada', ({ ranking }: { ranking: JugadorRanking[] }) => procesarRanking(ranking))
-    return () => { socket.off('ranking-partida'); socket.off('partida-finalizada') }
-  }, [socket, jugadorId, cupon, generando, salaId])
+    return () => {
+      socket.off('ranking-partida')
+      socket.off('partida-finalizada')
+      socket.off('round-reset')
+    }
+  }, [socket, jugadorId, cupon, generando, salaId, navigate])
 
   const handleCanjear = async () => {
     if (!cupon || canjeado || canjeando) return

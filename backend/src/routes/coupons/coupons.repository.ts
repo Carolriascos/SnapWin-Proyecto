@@ -14,14 +14,19 @@ const generarCodigo = (): string => {
   return `FP-${parte1}-${parte2}`;
 };
 
+const BOGOTA_TZ = "America/Bogota";
+
 const formatFecha = (iso: string | null | undefined): string => {
   if (!iso) return "-";
   return new Date(iso).toLocaleString("es-CO", {
+    timeZone: BOGOTA_TZ,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
   });
 };
 
@@ -44,8 +49,17 @@ const generateCoupon = async (jugadorId: string, posicion: number): Promise<ApiR
     return { success: false, error: "Posición inválida para generar cupón" };
   }
 
-  const expiresAt = new Date();
-  expiresAt.setHours(23, 59, 59, 999);
+  const now = new Date();
+  const expiresParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BOGOTA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const y = expiresParts.find((p) => p.type === "year")?.value ?? "2026";
+  const m = expiresParts.find((p) => p.type === "month")?.value ?? "01";
+  const d = expiresParts.find((p) => p.type === "day")?.value ?? "01";
+  const expiresAt = new Date(`${y}-${m}-${d}T23:59:59.999-05:00`);
 
   const coupon: Omit<Coupon, "id"> = {
     codigo: generarCodigo(),
@@ -64,6 +78,7 @@ const generateCoupon = async (jugadorId: string, posicion: number): Promise<ApiR
       descuento: coupon.descuento,
       canjeado: false,
       expires_at: coupon.expiresAt,
+      created_at: now.toISOString(),
     })
     .select()
     .single();

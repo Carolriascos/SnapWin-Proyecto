@@ -4,6 +4,7 @@ import { useSocket } from '../../hooks/useSocket'
 import { Jugador } from '../../types'
 import SnapHeader from '../../components/SnapHeader'
 import { getGameMode, getGameLabel, hasGameMode } from '../../utils/gameMode'
+import { rejoinOnResume } from '../../utils/sessionRejoin'
 
 export default function WaitingPage() {
   const navigate  = useNavigate()
@@ -28,11 +29,8 @@ export default function WaitingPage() {
     if (socket.connected) emitJoin()
     else socket.on('connect', emitJoin)
 
-    socket.on('reconnect', emitJoin)
-
     socket.on('players-update', (data: any) => {
-      const soloJugadores = data.filter((j: any) => j.id !== 'mall-screen' && j.id !== 'admin-panel')
-      setJugadores(soloJugadores)
+      setJugadores(data)
     })
 
     socket.on('countdown', ({ count }: { count: number }) => setCountdown(count))
@@ -47,27 +45,17 @@ export default function WaitingPage() {
       setCountdown(null)
     })
 
+    const cleanupRejoin = rejoinOnResume(socket, joinData)
+
     return () => {
       socket.off('connect', emitJoin)
-      socket.off('reconnect', emitJoin)
       socket.off('players-update')
       socket.off('countdown')
       socket.off('game-start')
       socket.off('round-reset')
+      cleanupRejoin?.()
     }
   }, [socket, navigate])
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && joinDataRef.current) {
-        if (socket.connected) {
-          socket.emit('join-sala', joinDataRef.current)
-        }
-      }
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [socket])
 
   const progressPct = countdown !== null && countdown > 0
     ? ((30 - Math.min(countdown, 30)) / 30) * 100

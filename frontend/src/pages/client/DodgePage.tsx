@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
+import { createTiltSensor, needsSensorPermission } from '../../utils/tiltSensor'
+import { rejoinOnResume } from '../../utils/sessionRejoin'
+import { getGameMode } from '../../utils/gameMode'
 
 const DURACION   = 30
 const LANES      = 4
@@ -26,8 +29,9 @@ export default function DodgePage() {
   const obstaculosRef  = useRef<Obstacle[]>([])
   const puntosRef      = useRef(0)
   const vidasRef       = useRef(3)
-  const lastGammaRef   = useRef(0)
-  const lastOrientTime = useRef(0)
+  const gameEndAtRef   = useRef(Date.now() + DURACION * 1000)
+  const pausedRef      = useRef(false)
+  const sensorRef      = useRef<ReturnType<typeof createTiltSensor> | null>(null)
 
   const [carril,     setCarril]     = useState(1)
   const [obstaculos, setObstaculos] = useState<Obstacle[]>([])
@@ -35,10 +39,15 @@ export default function DodgePage() {
   const [vidas,      setVidas]      = useState(3)
   const [puntos,     setPuntos]     = useState(0)
   const [parpadeo,   setParpadeo]   = useState(false)
-  const [sensorOk,   setSensorOk]   = useState<boolean | null>(null) // null=no sabe aún
+  const [sensorOk,   setSensorOk]   = useState<boolean | null>(null)
+  const [needsPerm,  setNeedsPerm]  = useState(needsSensorPermission())
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
   const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
+  const nombre    = localStorage.getItem('nombre')    ?? 'Jugador'
+  const color     = localStorage.getItem('color')     ?? '#7c3aed'
+
+  const joinData = { salaId, jugador: { id: jugadorId, nombre, color, gameMode: getGameMode() } }
 
   const emitSync = useCallback(() => {
     const lane = carrilRef.current
@@ -84,16 +93,34 @@ export default function DodgePage() {
     if (vidasRef.current <= 0) setTimeout(() => terminar(), 400)
   }, [terminar, emitSync])
 
+  const startSensors = useCallback(async () => {
+    sensorRef.current?.stop()
+    setSensorOk(null)
+    const sensor = createTiltSensor(
+      (dir) => setCarrilSeguro(carrilRef.current + dir),
+      () => setSensorOk(true),
+      () => setSensorOk(false),
+    )
+    sensorRef.current = sensor
+    const granted = await sensor.start()
+    if (!granted) setSensorOk(false)
+    setNeedsPerm(false)
+  }, [setCarrilSeguro])
+
+  useEffect(() => {
+    if (!needsPerm) startSensors()
+    return () => sensorRef.current?.stop()
+  }, [needsPerm, startSensors])
 
   useEffect(() => {
     const spawn = setInterval(() => {
-      if (terminadoRef.current) return
+      if (terminadoRef.current || pausedRef.current || document.hidden) return
       const obs: Obstacle = { id: idRef.current++, lane: Math.floor(Math.random() * LANES), y: -12 }
       obstaculosRef.current = [...obstaculosRef.current, obs]
     }, SPAWN_MS)
 
     const tick = setInterval(() => {
-      if (terminadoRef.current) return
+      if (terminadoRef.current || pausedRef.current || document.hidden) return
       let hit = false
       const next: Obstacle[] = []
       for (const o of obstaculosRef.current) {
@@ -112,67 +139,17 @@ export default function DodgePage() {
     }, TICK_MS)
 
     return () => { clearInterval(spawn); clearInterval(tick) }
-  }, [perderVida, terminar, emitSync])
-
+  }, [perderVida, emitSync])
 
   useEffect(() => {
     const intervalo = setInterval(() => {
-      setSegundos(prev => {
-        if (prev <= 1) { clearInterval(intervalo); terminar(); return 0 }
-        return prev - 1
-      })
-    }, 1000)
+      if (pausedRef.current || document.hidden) return
+      const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
+      setSegundos(restante)
+      if (restante <= 0) { clearInterval(intervalo); terminar() }
+    }, 250)
     return () => clearInterval(intervalo)
   }, [terminar])
-
-
-  useEffect(() => {
-    const requestAndListen = () => {
-      const handler = (e: DeviceOrientationEvent) => {
-        if (!e.gamma && e.gamma !== 0) return
-        setSensorOk(true)
-
-        const now = Date.now()
-        if (now - lastOrientTime.current < 300) return
-
-        const gamma = e.gamma ?? 0
-        const delta = gamma - lastGammaRef.current
-        lastGammaRef.current = gamma
-
-        if (gamma < -15) {
-          lastOrientTime.current = now
-          setCarrilSeguro(carrilRef.current - 1)
-        } else if (gamma > 15) {
-          lastOrientTime.current = now
-          setCarrilSeguro(carrilRef.current + 1)
-        }
-      }
-
-
-      const DevOrient = DeviceOrientationEvent as any
-      if (typeof DevOrient.requestPermission === 'function') {
-        DevOrient.requestPermission()
-          .then((state: string) => {
-            if (state === 'granted') {
-              window.addEventListener('deviceorientation', handler)
-              setSensorOk(true)
-            } else {
-              setSensorOk(false)
-            }
-          })
-          .catch(() => setSensorOk(false))
-      } else {
-        window.addEventListener('deviceorientation', handler)
-        setTimeout(() => { if (sensorOk === null) setSensorOk(false) }, 2000)
-      }
-
-      return () => window.removeEventListener('deviceorientation', handler)
-    }
-
-    const cleanup = requestAndListen()
-    return cleanup
-  }, [setCarrilSeguro])
-
 
   useEffect(() => {
     let startX = 0
@@ -189,16 +166,30 @@ export default function DodgePage() {
     return () => { arena.removeEventListener('touchstart', ts); arena.removeEventListener('touchend', te) }
   }, [setCarrilSeguro])
 
-
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && !terminadoRef.current) {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        pausedRef.current = true
+      } else if (!terminadoRef.current) {
+        pausedRef.current = false
+        const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
+        setSegundos(restante)
         emitSync()
+        startSensors()
       }
     }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [emitSync])
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pageshow', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pageshow', onVisibility)
+    }
+  }, [emitSync, startSensors])
+
+  useEffect(() => {
+    const cleanup = rejoinOnResume(socket, joinData)
+    return cleanup
+  }, [socket])
 
   useEffect(() => { emitSync() }, [emitSync])
 
@@ -213,10 +204,20 @@ export default function DodgePage() {
         <p className="dodge-game__mode">DODGE GAME</p>
         <p className={`dodge-timer ${timerClass}`}>{segundos}s</p>
 
+        {needsPerm && (
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ marginBottom: '0.5rem', fontSize: '0.85rem', padding: '10px 16px' }}
+            onClick={() => startSensors()}
+          >
+            Activar sensores de movimiento
+          </button>
+        )}
 
-        {sensorOk === false && (
+        {sensorOk === false && !needsPerm && (
           <p style={{ color: '#ff8c1a', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.4rem' }}>
-            ⚠️ Sensor no disponible — usa los botones ◀ ▶ o desliza
+            Sensor no disponible — usa los botones ◀ ▶ o desliza
           </p>
         )}
 

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
+import { rejoinOnResume } from '../../utils/sessionRejoin'
+import { getGameMode } from '../../utils/gameMode'
 
 const DURACION = 30
 
@@ -14,8 +16,10 @@ const DECAY_INTERVAL = 50
 export default function ShakePage() {
   const navigate     = useNavigate()
   const socket       = useSocket()
-  const puntosRef    = useRef(0)
-  const terminadoRef = useRef(false)
+  const puntosRef      = useRef(0)
+  const terminadoRef   = useRef(false)
+  const gameEndAtRef   = useRef(Date.now() + DURACION * 1000)
+  const pausedRef      = useRef(false)
 
   const [puntos,       setPuntos]       = useState(0)
   const [segundos,     setSegundos]     = useState(DURACION)
@@ -28,6 +32,9 @@ export default function ShakePage() {
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
   const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
+  const nombre    = localStorage.getItem('nombre')    ?? 'Jugador'
+  const color     = localStorage.getItem('color')     ?? '#7c3aed'
+  const joinData  = { salaId, jugador: { id: jugadorId, nombre, color, gameMode: getGameMode() } }
 
   
   const actualizarPuesto = useCallback(() => {
@@ -83,7 +90,8 @@ export default function ShakePage() {
   
   useEffect(() => {
     const handler = (e: DeviceMotionEvent) => {
-      const acc = e.acceleration
+      if (pausedRef.current || document.hidden || terminadoRef.current) return
+      const acc = e.accelerationIncludingGravity ?? e.acceleration
       if (!acc) return
       const f = Math.sqrt((acc.x ?? 0) ** 2 + (acc.y ?? 0) ** 2 + (acc.z ?? 0) ** 2)
       if (f > 2) {
@@ -112,17 +120,36 @@ export default function ShakePage() {
   
   useEffect(() => {
     const intervalo = setInterval(() => {
-      setSegundos(prev => {
-        if (prev <= 1) {
-          clearInterval(intervalo)
-          terminar()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
+      if (pausedRef.current || document.hidden) return
+      const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
+      setSegundos(restante)
+      if (restante <= 0) { clearInterval(intervalo); terminar() }
+    }, 250)
     return () => clearInterval(intervalo)
   }, [])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        pausedRef.current = true
+      } else if (!terminadoRef.current) {
+        pausedRef.current = false
+        const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
+        setSegundos(restante)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pageshow', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pageshow', onVisibility)
+    }
+  }, [])
+
+  useEffect(() => {
+    const cleanup = rejoinOnResume(socket, joinData)
+    return cleanup
+  }, [socket])
 
   const terminar = async () => {
     if (terminadoRef.current) return
