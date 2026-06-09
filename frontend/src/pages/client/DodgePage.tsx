@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../../hooks/useSocket'
 import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
-import { createTiltSensor, needsSensorPermission } from '../../utils/tiltSensor'
+import {
+  createTiltSensor,
+  getSensorCapabilities,
+  getSensorStatusMessage,
+  type SensorStatus,
+} from '../../utils/tiltSensor'
 import { rejoinOnResume } from '../../utils/sessionRejoin'
 import { getGameMode } from '../../utils/gameMode'
 
@@ -31,16 +36,19 @@ export default function DodgePage() {
   const vidasRef       = useRef(3)
   const gameEndAtRef   = useRef(Date.now() + DURACION * 1000)
   const pausedRef      = useRef(false)
-  const sensorRef      = useRef<ReturnType<typeof createTiltSensor> | null>(null)
+  const sensorRef        = useRef<ReturnType<typeof createTiltSensor> | null>(null)
+  const sensorActiveRef  = useRef(false)
+  const sensorCaps       = getSensorCapabilities()
 
-  const [carril,     setCarril]     = useState(1)
-  const [obstaculos, setObstaculos] = useState<Obstacle[]>([])
-  const [segundos,   setSegundos]   = useState(DURACION)
-  const [vidas,      setVidas]      = useState(3)
-  const [puntos,     setPuntos]     = useState(0)
-  const [parpadeo,   setParpadeo]   = useState(false)
-  const [sensorOk,   setSensorOk]   = useState<boolean | null>(null)
-  const [needsPerm,  setNeedsPerm]  = useState(needsSensorPermission())
+  const [carril,       setCarril]       = useState(1)
+  const [obstaculos,   setObstaculos]   = useState<Obstacle[]>([])
+  const [segundos,     setSegundos]     = useState(DURACION)
+  const [vidas,        setVidas]        = useState(3)
+  const [puntos,       setPuntos]       = useState(0)
+  const [parpadeo,     setParpadeo]     = useState(false)
+  const [sensorStatus, setSensorStatus] = useState<SensorStatus>(
+    sensorCaps.requiresUserGesture ? 'pending_permission' : 'idle',
+  )
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
   const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
@@ -95,22 +103,23 @@ export default function DodgePage() {
 
   const startSensors = useCallback(async () => {
     sensorRef.current?.stop()
-    setSensorOk(null)
-    const sensor = createTiltSensor(
-      (dir) => setCarrilSeguro(carrilRef.current + dir),
-      () => setSensorOk(true),
-      () => setSensorOk(false),
-    )
+    sensorActiveRef.current = false
+
+    const sensor = createTiltSensor({
+      onTilt: (dir) => setCarrilSeguro(carrilRef.current + dir),
+      onStatus: (status) => {
+        setSensorStatus(status)
+        sensorActiveRef.current = status === 'active'
+      },
+    })
     sensorRef.current = sensor
-    const granted = await sensor.start()
-    if (!granted) setSensorOk(false)
-    setNeedsPerm(false)
+    await sensor.start()
   }, [setCarrilSeguro])
 
   useEffect(() => {
-    if (!needsPerm) startSensors()
+    if (!sensorCaps.requiresUserGesture) startSensors()
     return () => sensorRef.current?.stop()
-  }, [needsPerm, startSensors])
+  }, [startSensors])
 
   useEffect(() => {
     const spawn = setInterval(() => {
@@ -175,7 +184,9 @@ export default function DodgePage() {
         const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
         setSegundos(restante)
         emitSync()
-        startSensors()
+        if (sensorActiveRef.current || !sensorCaps.requiresUserGesture) {
+          startSensors()
+        }
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
@@ -205,20 +216,20 @@ export default function DodgePage() {
         <p className="dodge-game__mode">DODGE GAME</p>
         <p className={`dodge-timer ${timerClass}`}>{segundos}s</p>
 
-        {needsPerm && (
+        {sensorStatus === 'pending_permission' && (
           <button
             type="button"
             className="btn-primary"
             style={{ marginBottom: '0.5rem', fontSize: '0.85rem', padding: '10px 16px' }}
             onClick={() => startSensors()}
           >
-            Activar sensores de movimiento
+            Activar control por inclinación
           </button>
         )}
 
-        {sensorOk === false && !needsPerm && (
+        {getSensorStatusMessage(sensorStatus) && sensorStatus !== 'pending_permission' && (
           <p style={{ color: '#ff8c1a', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.4rem' }}>
-            Sensor no disponible — usa los botones ◀ ▶ o desliza
+            {getSensorStatusMessage(sensorStatus)}
           </p>
         )}
 
