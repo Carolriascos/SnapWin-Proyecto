@@ -35,7 +35,6 @@ const SMOOTHING_ALPHA    = 0.7
 const CALIBRATION_COUNT  = 5
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
-const BASE_HORIZONTAL_SIGN = 1
 
 type PermissionCtor = { requestPermission?: () => Promise<PermissionState | string> }
 
@@ -89,46 +88,60 @@ export function getSensorStatusMessage(status: SensorStatus): string | null {
 function screenAngle(): number {
   if (screen.orientation?.angle != null) return screen.orientation.angle
   const o = window.orientation
-  return typeof o === 'number' ? o : 0
+  return typeof o === 'number' ? (o < 0 ? o + 360 : o) : 0
 }
 
-function tiltFromGravity(ax: number, ay: number, az: number): number {
-  const angle = screenAngle()
-  let gx = ax, gy = ay
-  if (angle === 90)                        { gx = -ay; gy =  ax }
-  else if (angle === 180)                  { gx = -ax; gy = -ay }
-  else if (angle === 270 || angle === -90) { gx =  ay; gy = -ax }
-  const denom = Math.sqrt(gy * gy + az * az) || 1
-  return  (Math.atan2(gx, denom) * 180) / Math.PI
-}
 
-function normalizeOrientationTilt(e: DeviceOrientationEvent, orientSign: number): number | null {
+function normalizeOrientationTilt(e: DeviceOrientationEvent): number | null {
   if (e.beta == null || e.gamma == null) return null
   if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return null
 
   const angle = screenAngle()
-  let tilt = 0
-  
-  
+
   if (angle === 0) {
-    tilt = e.gamma
+    return e.gamma
   } else if (angle === 180) {
-    tilt = -e.gamma
+    return -e.gamma
   } else if (angle === 90) {
-    tilt = e.beta
-  } else if (angle === 270 || angle === -90) {
-    tilt = -e.beta
-  } else {
-    tilt = e.gamma
+    
+    return e.beta
+  } else if (angle === 270) {
+    return -e.beta
   }
 
-  return tilt * orientSign
+  return e.gamma
+}
+
+
+function tiltFromGravity(ax: number, ay: number, az: number): number {
+  const angle = screenAngle()
+
+  let gx = ax
+  let gz = az
+  if (angle === 90) {
+    gx = -ay
+  } else if (angle === 180) {
+    gx = -ax
+  } else if (angle === 270) {
+    gx = ay
+  }
+
+  const denom = Math.sqrt(ay * ay + gz * gz) || 1
+  return (Math.atan2(gx, denom) * 180) / Math.PI
+}
+
+
+function detectMotionSign(ay: number | null): number {
+  if (ay == null) return 1
+  return ay < -3 ? -1 : 1
 }
 
 function normalizeMotionTilt(e: DeviceMotionEvent): number | null {
   const g = e.accelerationIncludingGravity
   if (!g || g.x == null || g.y == null || g.z == null) return null
-  return tiltFromGravity(g.x, g.y, g.z)
+  const raw = tiltFromGravity(g.x, g.y, g.z)
+  const sign = detectMotionSign(g.y)
+  return raw * sign
 }
 
 async function requestSensorPermission(
@@ -154,11 +167,6 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
   let lastOrientAt   = 0
   let orientDisabled = false
   let orientSamples: number[] = []
-  let orientSign = 1
-  let lastMotionTilt: number | null = null
-  let lastOrientTiltRaw: number | null = null
-  let signAcc = 0
-  let signAccCount = 0
 
   let calibrationBuf: number[] = []
   let neutralTilt   = 0
@@ -240,31 +248,20 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
     lastOrientAt   = 0
     orientDisabled = false
     orientSamples  = []
-    orientSign = 1
-    lastMotionTilt = null
-    lastOrientTiltRaw = null
-    signAcc = 0
-    signAccCount = 0
 
     if (useOrientation) {
       orientHandler = (e: DeviceOrientationEvent) => {
         if (orientDisabled) return
-        const raw = normalizeOrientationTilt(e, 1)
-        if (raw == null) return
-        lastOrientTiltRaw = raw
-        if (lastMotionTilt != null && signAccCount < 18) {
-          signAcc += raw * lastMotionTilt
-          signAccCount += 1
-          if (signAccCount >= 12) orientSign = signAcc < 0 ? -1 : 1
-        }
+        const tilt = normalizeOrientationTilt(e)
+        if (tilt == null) return
 
-        const tilt = raw * orientSign
         orientSamples.push(tilt)
         if (orientSamples.length > 20) orientSamples.shift()
         checkOrientUseless()
         if (orientDisabled) return
+
         lastOrientAt = Date.now()
-        processTiltSample(tilt * BASE_HORIZONTAL_SIGN)
+        processTiltSample(tilt)
       }
       window.addEventListener('deviceorientation', orientHandler, { passive: true })
     }
@@ -274,15 +271,10 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         const orientFresh = useOrientation && !orientDisabled && lastOrientAt > 0 &&
           Date.now() - lastOrientAt < ORIENT_STALE_MS
         if (orientFresh) return
+
         const tilt = normalizeMotionTilt(e)
         if (tilt == null) return
-        lastMotionTilt = tilt
-        if (lastOrientTiltRaw != null && signAccCount < 18) {
-          signAcc += lastOrientTiltRaw * tilt
-          signAccCount += 1
-          if (signAccCount >= 12) orientSign = signAcc < 0 ? -1 : 1
-        }
-        processTiltSample(tilt * BASE_HORIZONTAL_SIGN)
+        processTiltSample(tilt)
       }
       window.addEventListener('devicemotion', motionHandler, { passive: true })
     }
