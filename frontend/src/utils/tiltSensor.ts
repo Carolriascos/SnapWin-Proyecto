@@ -75,7 +75,7 @@ export function isMobileDevice(): boolean {
 export function getSensorStatusMessage(status: SensorStatus): string | null {
   switch (status) {
     case 'pending_permission':
-      return null // El botón lo maneja DodgePage
+      return null 
     case 'denied':
       return 'No pudimos acceder al sensor. Usa los botones ◀ ▶ o desliza el dedo.'
     case 'unavailable':
@@ -203,11 +203,11 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
 
     if (now - lastChangeTime < COOLDOWN_MS) return
 
-    if (relative < -LANE_THRESHOLD_DEG) {
+    if (relative > LANE_THRESHOLD_DEG) {
       callbacks.onTilt(-1)
       lastChangeTime = now
       armed = false
-    } else if (relative > LANE_THRESHOLD_DEG) {
+    } else if (relative < -LANE_THRESHOLD_DEG) {
       callbacks.onTilt(1)
       lastChangeTime = now
       armed = false
