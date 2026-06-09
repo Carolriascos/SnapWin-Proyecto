@@ -147,17 +147,24 @@ export const setupSocket = (io: Server) => {
 
     socket.on("admin-start-round", (data: { salaId: string }) => {
       const salaId = data.salaId;
+
+      const jugadoresAntes = salas.get(salaId) ?? [];
+      const humanosAntes = jugadoresAntes.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
+
       resetSala(salaId);
 
-      const jugadoresActuales = salas.get(salaId) ?? [];
-      const humanos = jugadoresActuales.filter((j) => j.id !== "mall-screen" && j.id !== "admin-panel");
-
-      if (humanos.length >= 2) {
+      if (humanosAntes.length >= 2) {
+        const jugadoresPost = salas.get(salaId) ?? [];
+        for (const h of humanosAntes) {
+          jugadoresPost.push(h);
+        }
+        salas.set(salaId, jugadoresPost);
+        io.to(salaId).emit("players-update", jugadoresPost);
         startGame(salaId);
-        console.log(`Admin arrancó partida inmediata en ${salaId} con ${humanos.length} jugadores`);
+        console.log(`Admin arrancó partida inmediata en ${salaId} con ${humanosAntes.length} jugadores`);
       } else {
         salaAdminWantsStart.set(salaId, true);
-        console.log(`Admin esperando jugadores en ${salaId} (${humanos.length} conectados)`);
+        console.log(`Admin esperando jugadores en ${salaId} (${humanosAntes.length} conectados)`);
       }
     });
 

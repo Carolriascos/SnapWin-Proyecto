@@ -26,6 +26,7 @@ export default function MallWaitingPage() {
     else socket.on('connect', emitJoin)
 
     socket.on('players-update', (data: Jugador[]) => {
+      // s
       setJugadores(data.filter(j => !esNoJugador(j)))
     })
 
