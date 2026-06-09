@@ -28,10 +28,10 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG      = 1.2
-const LANE_THRESHOLD_DEG = 1.8
-const COOLDOWN_MS        = 50
-const SMOOTHING_ALPHA    = 0.7
+const DEAD_ZONE_DEG      = 0.9
+const LANE_THRESHOLD_DEG = 1.2
+const COOLDOWN_MS        = 35
+const SMOOTHING_ALPHA    = 0.75
 const CALIBRATION_COUNT  = 5
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
@@ -59,7 +59,8 @@ export function getSensorCapabilities(): SensorCapabilities {
 }
 
 export function needsSensorPermission(): boolean {
-  return true
+  const caps = getSensorCapabilities()
+  return caps.needsOrientationPermission || caps.needsMotionPermission
 }
 
 export function isMobileDevice(): boolean {
@@ -86,62 +87,76 @@ export function getSensorStatusMessage(status: SensorStatus): string | null {
 }
 
 function screenAngle(): number {
-  if (screen.orientation?.angle != null) return screen.orientation.angle
+  if (typeof window === 'undefined') return 0
+  if (screen.orientation?.angle != null) {
+    const a = screen.orientation.angle
+    return ((a % 360) + 360) % 360
+  }
   const o = window.orientation
-  return typeof o === 'number' ? (o < 0 ? o + 360 : o) : 0
+  if (typeof o === 'number') return ((o % 360) + 360) % 360
+  return 0
 }
 
+function isPortraitLayout(): boolean {
+  if (typeof window === 'undefined') return true
+  return window.matchMedia('(orientation: portrait)').matches
+}
 
-function normalizeOrientationTilt(e: DeviceOrientationEvent): number | null {
+/**
+ * Extrae inclinación lateral en grados, normalizada a la pantalla.
+ * Positivo = inclinar a la DERECHA, negativo = inclinar a la IZQUIERDA.
+ * Usa matchMedia para portrait/landscape (más fiable que solo screen.angle).
+ */
+function getOrientationTiltDegrees(e: DeviceOrientationEvent): number | null {
   if (e.beta == null || e.gamma == null) return null
   if (!Number.isFinite(e.beta) || !Number.isFinite(e.gamma)) return null
 
   const angle = screenAngle()
+  const portrait = isPortraitLayout()
 
-  if (angle === 0) {
-    return e.gamma
-  } else if (angle === 180) {
-    return -e.gamma
-  } else if (angle === 90) {
-    
-    return e.beta
-  } else if (angle === 270) {
-    return -e.beta
+  let tilt: number
+  if (portrait) {
+    // En portrait, gamma es el eje izquierda/derecha (W3C).
+    tilt = e.gamma
+    if (angle === 180) tilt = -tilt
+  } else {
+    // En landscape, beta es el eje lateral.
+    tilt = e.beta
+    if (angle === 270) tilt = -tilt
+    else if (angle === 90) tilt = -tilt
   }
 
-  return e.gamma
+  // Negar para alinear con la dirección visual del juego en navegadores móviles.
+  return -tilt
 }
 
-
-function tiltFromGravity(ax: number, ay: number, az: number): number {
-  const angle = screenAngle()
-
-  let gx = ax
-  let gz = az
-  if (angle === 90) {
-    gx = -ay
-  } else if (angle === 180) {
-    gx = -ax
-  } else if (angle === 270) {
-    gx = ay
-  }
-
-  const denom = Math.sqrt(ay * ay + gz * gz) || 1
-  return (Math.atan2(gx, denom) * 180) / Math.PI
-}
-
-
-function detectMotionSign(ay: number | null): number {
-  if (ay == null) return 1
-  return ay < -3 ? -1 : 1
-}
-
-function normalizeMotionTilt(e: DeviceMotionEvent): number | null {
+/**
+ * Fallback con acelerómetro: misma convención que orientation.
+ */
+function getMotionTiltDegrees(e: DeviceMotionEvent): number | null {
   const g = e.accelerationIncludingGravity
   if (!g || g.x == null || g.y == null || g.z == null) return null
-  const raw = tiltFromGravity(g.x, g.y, g.z)
-  const sign = detectMotionSign(g.y)
-  return raw * sign
+  if (!Number.isFinite(g.x) || !Number.isFinite(g.y) || !Number.isFinite(g.z)) return null
+
+  const angle = screenAngle()
+  const portrait = isPortraitLayout()
+
+  let lateral: number
+  let vertical: number
+
+  if (portrait) {
+    lateral = g.x
+    vertical = Math.hypot(g.y, g.z)
+    if (angle === 180) lateral = -lateral
+  } else {
+    lateral = g.y
+    vertical = Math.hypot(g.x, g.z)
+    if (angle === 270) lateral = -lateral
+    else if (angle === 90) lateral = -lateral
+  }
+
+  const deg = (Math.atan2(lateral, vertical || 1) * 180) / Math.PI
+  return -deg
 }
 
 async function requestSensorPermission(
@@ -233,12 +248,14 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
 
     if (now - lastChangeTime < COOLDOWN_MS) return
 
+    // relative > 0 → inclinación a la derecha → carril +
+    // relative < 0 → inclinación a la izquierda → carril -
     if (relative > LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(1)   
+      callbacks.onTilt(1)
       lastChangeTime = now
       armed = false
     } else if (relative < -LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(-1)  
+      callbacks.onTilt(-1)
       lastChangeTime = now
       armed = false
     }
@@ -252,7 +269,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
     if (useOrientation) {
       orientHandler = (e: DeviceOrientationEvent) => {
         if (orientDisabled) return
-        const tilt = normalizeOrientationTilt(e)
+        const tilt = getOrientationTiltDegrees(e)
         if (tilt == null) return
 
         orientSamples.push(tilt)
@@ -272,7 +289,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
           Date.now() - lastOrientAt < ORIENT_STALE_MS
         if (orientFresh) return
 
-        const tilt = normalizeMotionTilt(e)
+        const tilt = getMotionTiltDegrees(e)
         if (tilt == null) return
         processTiltSample(tilt)
       }
@@ -310,6 +327,8 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
 
       if (!caps.secureContext) { setStatus('unavailable'); return false }
       if (!caps.hasDeviceOrientation && !caps.hasDeviceMotion) { setStatus('unavailable'); return false }
+
+      setStatus('pending_permission')
 
       let allowOrientation = caps.hasDeviceOrientation
       let allowMotion = caps.hasDeviceMotion

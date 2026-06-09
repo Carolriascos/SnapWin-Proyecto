@@ -88,18 +88,19 @@ export default function DodgeLivePage() {
       })
     })
 
-    socket.on('dodge-player-state', ({ jugadorId, carril, vidas, puntos, eliminado }: any) => {
+    socket.on('dodge-player-state', ({ jugadorId, carril, vidas, puntos }: any) => {
       setJugadores(prev => {
         if (!prev[jugadorId]) return prev
         const lane = typeof carril === 'number' ? Math.min(LANES - 1, Math.max(0, carril)) : prev[jugadorId].carril
+        const vidasActual = typeof vidas === 'number' ? Math.max(0, vidas) : prev[jugadorId].vidas
         return {
           ...prev,
           [jugadorId]: {
             ...prev[jugadorId],
             carril: lane,
-            vidas: typeof vidas === 'number' ? Math.max(0, vidas) : prev[jugadorId].vidas,
+            vidas: vidasActual,
             puntos: typeof puntos === 'number' ? puntos : prev[jugadorId].puntos,
-            eliminado: Boolean(eliminado ?? prev[jugadorId].eliminado),
+            eliminado: vidasActual <= 0,
           },
         }
       })

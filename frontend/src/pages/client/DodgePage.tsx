@@ -62,7 +62,7 @@ export default function DodgePage() {
       carril: lane,
       vidas: vidasRef.current,
       puntos: puntosRef.current,
-      eliminado: vidasRef.current <= 0,
+      eliminado: vidasRef.current === 0,
       obstaculos: obstaculosRef.current.map(o => ({ id: o.id, lane: o.lane, y: o.y })),
     })
   }, [socket, salaId, jugadorId])
