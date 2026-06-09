@@ -1,6 +1,4 @@
-/**
- * Sistema de inclinación para Dodge — multiplataforma (Android / iOS).
- */
+
 
 export type TiltDirection = -1 | 1
 
@@ -32,19 +30,19 @@ export interface TiltSensorHandle {
   getStatus: () => SensorStatus
 }
 
-const DEAD_ZONE_DEG       = 7
-const LANE_THRESHOLD_DEG  = 16
-const COOLDOWN_MS         = 420
-const SMOOTHING_ALPHA     = 0.18
-const CALIBRATION_COUNT   = 10
-const NO_DATA_TIMEOUT_MS  = 4000
-const ORIENT_STALE_MS     = 600
+const DEAD_ZONE_DEG      = 5
+const LANE_THRESHOLD_DEG = 12
+const COOLDOWN_MS        = 350
+const SMOOTHING_ALPHA    = 0.25
+const CALIBRATION_COUNT  = 6
+const NO_DATA_TIMEOUT_MS = 3000
+const ORIENT_STALE_MS    = 500
 
 type PermissionCtor = { requestPermission?: () => Promise<PermissionState | string> }
 
 export function getSensorCapabilities(): SensorCapabilities {
   const hasDeviceOrientation = typeof window !== 'undefined' && 'DeviceOrientationEvent' in window
-  const hasDeviceMotion = typeof window !== 'undefined' && 'DeviceMotionEvent' in window
+  const hasDeviceMotion      = typeof window !== 'undefined' && 'DeviceMotionEvent' in window
   const needsOrientationPermission =
     hasDeviceOrientation &&
     typeof (DeviceOrientationEvent as unknown as PermissionCtor).requestPermission === 'function'
@@ -58,12 +56,12 @@ export function getSensorCapabilities(): SensorCapabilities {
     hasDeviceMotion,
     needsOrientationPermission,
     needsMotionPermission,
-    requiresUserGesture: needsOrientationPermission,
+    requiresUserGesture: true,
   }
 }
 
 export function needsSensorPermission(): boolean {
-  return getSensorCapabilities().requiresUserGesture
+  return true
 }
 
 export function isMobileDevice(): boolean {
@@ -77,13 +75,13 @@ export function isMobileDevice(): boolean {
 export function getSensorStatusMessage(status: SensorStatus): string | null {
   switch (status) {
     case 'pending_permission':
-      return 'Toca el botón para activar el control por inclinación.'
+      return null // El botón lo maneja DodgePage
     case 'denied':
       return 'No pudimos acceder al sensor. Usa los botones ◀ ▶ o desliza el dedo.'
     case 'unavailable':
       return 'Tu navegador no admite control por inclinación. Usa los botones ◀ ▶ o desliza.'
     case 'no_data':
-      return 'No detectamos movimiento. Usa los botones ◀ ▶ o desliza el dedo.'
+      return 'No detectamos movimiento. Intenta inclinar más el celular o usa ◀ ▶.'
     default:
       return null
   }
@@ -97,10 +95,9 @@ function screenAngle(): number {
 
 function tiltFromGravity(ax: number, ay: number, az: number): number {
   const angle = screenAngle()
-  let gx = ax
-  let gy = ay
-  if (angle === 90) { gx = -ay; gy = ax }
-  else if (angle === 180) { gx = -ax; gy = -ay }
+  let gx = ax, gy = ay
+  if (angle === 90)                    { gx = -ay; gy =  ax }
+  else if (angle === 180)              { gx = -ax; gy = -ay }
   else if (angle === 270 || angle === -90) { gx = ay; gy = -ax }
   const denom = Math.sqrt(gy * gy + az * az) || 1
   return (Math.atan2(gx, denom) * 180) / Math.PI
@@ -134,19 +131,18 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
 
   let status: SensorStatus = 'idle'
   let orientHandler: ((e: DeviceOrientationEvent) => void) | null = null
-  let motionHandler: ((e: DeviceMotionEvent) => void) | null = null
-  let noDataTimer: ReturnType<typeof setTimeout> | null = null
-  let receivingData = false
-  let lastOrientAt = 0
+  let motionHandler:  ((e: DeviceMotionEvent) => void) | null      = null
+  let noDataTimer:    ReturnType<typeof setTimeout> | null          = null
+  let receivingData  = false
+  let lastOrientAt   = 0
   let orientDisabled = false
   let orientSamples: number[] = []
 
   let calibrationBuf: number[] = []
-  let neutralTilt = 0
-  let calibrated = false
-  let smoothedTilt = 0
-  let hasSmoothed = false
-  let armed = true
+  let neutralTilt   = 0
+  let calibrated    = false
+  let smoothedTilt  = 0
+  let armed         = true
   let lastChangeTime = 0
 
   const setStatus = (next: SensorStatus) => {
@@ -175,10 +171,10 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
   }
 
   const checkOrientUseless = () => {
-    if (orientSamples.length < 6) return
+    if (orientSamples.length < 8) return
     const min = Math.min(...orientSamples)
     const max = Math.max(...orientSamples)
-    if (max - min < 2) orientDisabled = true
+    if (max - min < 1.5) orientDisabled = true
   }
 
   const processTiltSample = (raw: number) => {
@@ -188,10 +184,9 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
     if (!calibrated) {
       calibrationBuf.push(raw)
       if (calibrationBuf.length >= CALIBRATION_COUNT) {
-        neutralTilt = calibrationBuf.reduce((a, b) => a + b, 0) / calibrationBuf.length
+        neutralTilt  = calibrationBuf.reduce((a, b) => a + b, 0) / calibrationBuf.length
         smoothedTilt = neutralTilt
-        calibrated = true
-        hasSmoothed = true
+        calibrated   = true
         calibrationBuf = []
       }
       return
@@ -220,9 +215,9 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
   }
 
   const attachListeners = (useOrientation: boolean, useMotion: boolean) => {
-    lastOrientAt = 0
+    lastOrientAt   = 0
     orientDisabled = false
-    orientSamples = []
+    orientSamples  = []
 
     if (useOrientation) {
       orientHandler = (e: DeviceOrientationEvent) => {
@@ -236,7 +231,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         lastOrientAt = Date.now()
         processTiltSample(tilt)
       }
-      window.addEventListener('deviceorientation', orientHandler)
+      window.addEventListener('deviceorientation', orientHandler, { passive: true })
     }
 
     if (useMotion) {
@@ -247,29 +242,28 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         const tilt = normalizeMotionTilt(e)
         if (tilt != null) processTiltSample(tilt)
       }
-      window.addEventListener('devicemotion', motionHandler)
+      window.addEventListener('devicemotion', motionHandler, { passive: true })
     }
   }
 
   const detachListeners = () => {
     if (orientHandler) window.removeEventListener('deviceorientation', orientHandler)
-    if (motionHandler) window.removeEventListener('devicemotion', motionHandler)
+    if (motionHandler)  window.removeEventListener('devicemotion',     motionHandler)
     orientHandler = null
-    motionHandler = null
+    motionHandler  = null
   }
 
   const resetState = () => {
-    receivingData = false
+    receivingData  = false
     calibrationBuf = []
-    neutralTilt = 0
-    calibrated = false
-    smoothedTilt = 0
-    hasSmoothed = false
-    armed = true
+    neutralTilt    = 0
+    calibrated     = false
+    smoothedTilt   = 0
+    armed          = true
     lastChangeTime = 0
     orientDisabled = false
-    orientSamples = []
-    lastOrientAt = 0
+    orientSamples  = []
+    lastOrientAt   = 0
   }
 
   return {
@@ -280,15 +274,8 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
       clearNoDataTimer()
       resetState()
 
-      if (!caps.secureContext) {
-        setStatus('unavailable')
-        return false
-      }
-
-      if (!caps.hasDeviceOrientation && !caps.hasDeviceMotion) {
-        setStatus('unavailable')
-        return false
-      }
+      if (!caps.secureContext) { setStatus('unavailable'); return false }
+      if (!caps.hasDeviceOrientation && !caps.hasDeviceMotion) { setStatus('unavailable'); return false }
 
       if (caps.needsOrientationPermission) {
         const result = await requestSensorPermission(
@@ -299,10 +286,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
             const motionResult = await requestSensorPermission(
               DeviceMotionEvent as unknown as PermissionCtor,
             )
-            if (motionResult === 'denied') {
-              setStatus('denied')
-              return false
-            }
+            if (motionResult === 'denied') { setStatus('denied'); return false }
             attachListeners(false, true)
             scheduleNoDataCheck()
             return true
@@ -312,10 +296,7 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
         }
       }
 
-      const useOrientation = caps.hasDeviceOrientation
-      const useMotion = caps.hasDeviceMotion
-
-      attachListeners(useOrientation, useMotion)
+      attachListeners(caps.hasDeviceOrientation, caps.hasDeviceMotion)
       scheduleNoDataCheck()
       return true
     },

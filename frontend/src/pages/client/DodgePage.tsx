@@ -5,9 +5,7 @@ import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
 import {
   createTiltSensor,
-  getSensorCapabilities,
   getSensorStatusMessage,
-  isMobileDevice,
   type SensorStatus,
 } from '../../utils/tiltSensor'
 import { rejoinOnResume } from '../../utils/sessionRejoin'
@@ -28,18 +26,18 @@ export default function DodgePage() {
   const navigate = useNavigate()
   const socket   = useSocket()
 
-  const terminadoRef   = useRef(false)
-  const invencibleRef  = useRef(false)
-  const idRef          = useRef(0)
-  const carrilRef      = useRef(1)
-  const obstaculosRef  = useRef<Obstacle[]>([])
-  const puntosRef      = useRef(0)
-  const vidasRef       = useRef(3)
-  const gameEndAtRef   = useRef(Date.now() + DURACION * 1000)
-  const pausedRef      = useRef(false)
-  const sensorRef        = useRef<ReturnType<typeof createTiltSensor> | null>(null)
-  const sensorActiveRef  = useRef(false)
-  const sensorCaps       = getSensorCapabilities()
+  const terminadoRef    = useRef(false)
+  const invencibleRef   = useRef(false)
+  const idRef           = useRef(0)
+  const carrilRef       = useRef(1)
+  const obstaculosRef   = useRef<Obstacle[]>([])
+  const puntosRef       = useRef(0)
+  const vidasRef        = useRef(3)
+  const gameEndAtRef    = useRef(Date.now() + DURACION * 1000)
+  const pausedRef       = useRef(false)
+  const sensorRef       = useRef<ReturnType<typeof createTiltSensor> | null>(null)
+  const sensorActiveRef = useRef(false)
+  const gameStartedRef  = useRef(false) 
 
   const [carril,       setCarril]       = useState(1)
   const [obstaculos,   setObstaculos]   = useState<Obstacle[]>([])
@@ -47,10 +45,8 @@ export default function DodgePage() {
   const [vidas,        setVidas]        = useState(3)
   const [puntos,       setPuntos]       = useState(0)
   const [parpadeo,     setParpadeo]     = useState(false)
-  const needsTapToStart = sensorCaps.requiresUserGesture || isMobileDevice()
-  const [sensorStatus, setSensorStatus] = useState<SensorStatus>(
-    needsTapToStart ? 'pending_permission' : 'idle',
-  )
+  const [sensorStatus, setSensorStatus] = useState<SensorStatus>('pending_permission')
+  const [gameStarted,  setGameStarted]  = useState(false)
 
   const jugadorId = localStorage.getItem('jugadorId') ?? 'sin-id'
   const salaId    = localStorage.getItem('salaId')    ?? 'sala-001'
@@ -106,7 +102,6 @@ export default function DodgePage() {
   const startSensors = useCallback(async () => {
     sensorRef.current?.stop()
     sensorActiveRef.current = false
-
     const sensor = createTiltSensor({
       onTilt: (dir) => setCarrilSeguro(carrilRef.current + dir),
       onStatus: (status) => {
@@ -118,12 +113,17 @@ export default function DodgePage() {
     await sensor.start()
   }, [setCarrilSeguro])
 
-  useEffect(() => {
-    if (!needsTapToStart) startSensors()
-    return () => sensorRef.current?.stop()
-  }, [startSensors, needsTapToStart])
+  const handleStartGame = useCallback(async () => {
+    if (gameStartedRef.current) return
+    gameStartedRef.current = true
+    setGameStarted(true)
+    gameEndAtRef.current = Date.now() + DURACION * 1000
+    await startSensors()
+  }, [startSensors])
 
   useEffect(() => {
+    if (!gameStarted) return
+
     const spawn = setInterval(() => {
       if (terminadoRef.current || pausedRef.current || document.hidden) return
       const obs: Obstacle = { id: idRef.current++, lane: Math.floor(Math.random() * LANES), y: -12 }
@@ -150,9 +150,10 @@ export default function DodgePage() {
     }, TICK_MS)
 
     return () => { clearInterval(spawn); clearInterval(tick) }
-  }, [perderVida, emitSync])
+  }, [gameStarted, perderVida, emitSync])
 
   useEffect(() => {
+    if (!gameStarted) return
     const intervalo = setInterval(() => {
       if (pausedRef.current || document.hidden) return
       const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
@@ -160,7 +161,7 @@ export default function DodgePage() {
       if (restante <= 0) { clearInterval(intervalo); terminar() }
     }, 250)
     return () => clearInterval(intervalo)
-  }, [terminar])
+  }, [gameStarted, terminar])
 
   useEffect(() => {
     let startX = 0
@@ -168,6 +169,7 @@ export default function DodgePage() {
     if (!arena) return
     const ts = (e: TouchEvent) => { startX = e.changedTouches[0].clientX }
     const te = (e: TouchEvent) => {
+      if (!gameStartedRef.current) return
       const dx = e.changedTouches[0].clientX - startX
       if (dx > 40)       setCarrilSeguro(carrilRef.current + 1)
       else if (dx < -40) setCarrilSeguro(carrilRef.current - 1)
@@ -181,14 +183,12 @@ export default function DodgePage() {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         pausedRef.current = true
-      } else if (!terminadoRef.current) {
+      } else if (!terminadoRef.current && gameStartedRef.current) {
         pausedRef.current = false
         const restante = Math.max(0, Math.ceil((gameEndAtRef.current - Date.now()) / 1000))
         setSegundos(restante)
         emitSync()
-        if (sensorActiveRef.current || !needsTapToStart) {
-          startSensors()
-        }
+        if (sensorActiveRef.current) startSensors()
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
@@ -202,13 +202,50 @@ export default function DodgePage() {
   useEffect(() => {
     socket.emit('join-sala', joinData)
     const cleanup = rejoinOnResume(socket, joinData)
-    return cleanup
+    return () => { cleanup(); sensorRef.current?.stop() }
   }, [socket])
 
   useEffect(() => { emitSync() }, [emitSync])
 
-  const eliminado   = vidas <= 0
-  const timerClass  = segundos > 15 ? 'dodge-timer--ok' : segundos > 5 ? 'dodge-timer--warn' : 'dodge-timer--danger'
+  const eliminado  = vidas <= 0
+  const timerClass = segundos > 15 ? 'dodge-timer--ok' : segundos > 5 ? 'dodge-timer--warn' : 'dodge-timer--danger'
+  const statusMsg  = getSensorStatusMessage(sensorStatus)
+
+  if (!gameStarted) {
+    return (
+      <div className="snap-screen dodge-game">
+        <div className="snap-pattern" aria-hidden />
+        <SnapHeader compact />
+        <main className="snap-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', padding: '2rem' }}>
+          <p className="dodge-game__mode">DODGE GAME</p>
+
+          <div style={{ fontSize: '4rem', lineHeight: 1 }}>🕹️</div>
+
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem' }}>
+              Inclina el celular para moverte
+            </p>
+            <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
+              También puedes deslizar o usar los botones ◀ ▶
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ fontSize: '1.1rem', padding: '14px 32px', borderRadius: '999px', fontWeight: 800, letterSpacing: '0.05em' }}
+            onClick={handleStartGame}
+          >
+            ¡Empezar!
+          </button>
+
+          <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
+            Al tocar "¡Empezar!" se activan los sensores de movimiento
+          </p>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="snap-screen dodge-game">
@@ -218,20 +255,9 @@ export default function DodgePage() {
         <p className="dodge-game__mode">DODGE GAME</p>
         <p className={`dodge-timer ${timerClass}`}>{segundos}s</p>
 
-        {sensorStatus === 'pending_permission' && (
-          <button
-            type="button"
-            className="btn-primary"
-            style={{ marginBottom: '0.5rem', fontSize: '0.85rem', padding: '10px 16px' }}
-            onClick={() => startSensors()}
-          >
-            Activar control por inclinación
-          </button>
-        )}
-
-        {getSensorStatusMessage(sensorStatus) && sensorStatus !== 'pending_permission' && (
-          <p style={{ color: '#ff8c1a', fontSize: '0.8rem', textAlign: 'center', marginBottom: '0.4rem' }}>
-            {getSensorStatusMessage(sensorStatus)}
+        {statusMsg && (
+          <p style={{ color: '#ff8c1a', fontSize: '0.78rem', textAlign: 'center', marginBottom: '0.3rem' }}>
+            {statusMsg}
           </p>
         )}
 
@@ -249,12 +275,7 @@ export default function DodgePage() {
           </div>
         </div>
 
-        <div
-          id="dodge-arena-touch"
-          className="dodge-arena dodge-arena--play"
-          onClick={() => { if (sensorStatus === 'pending_permission') startSensors() }}
-          role="presentation"
-        >
+        <div id="dodge-arena-touch" className="dodge-arena dodge-arena--play" role="presentation">
           <div className="dodge-arena__lanes" aria-hidden>
             {Array.from({ length: LANES }, (_, i) => (
               <span key={i} className={i === carril ? 'dodge-lane--active' : ''} />
