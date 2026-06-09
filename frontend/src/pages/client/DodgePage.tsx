@@ -187,6 +187,7 @@ export default function DodgePage() {
   }, [emitSync, startSensors])
 
   useEffect(() => {
+    socket.emit('join-sala', joinData)
     const cleanup = rejoinOnResume(socket, joinData)
     return cleanup
   }, [socket])

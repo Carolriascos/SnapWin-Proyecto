@@ -24,6 +24,18 @@ function laneX(lane: number) {
   return ((lane + 0.5) / LANES) * 100
 }
 
+function jugadorVacio(nombre = 'Jugador', color = '#7c3aed'): JugadorDodge {
+  return { nombre, color, carril: 1, vidas: VIDAS_INICIAL, puntos: 0, eliminado: false, obstaculos: [] }
+}
+
+function rosterToJugadores(roster: { id: string; nombre?: string; color?: string }[]): Record<string, JugadorDodge> {
+  const next: Record<string, JugadorDodge> = {}
+  roster.forEach(j => {
+    next[j.id] = jugadorVacio(j.nombre, j.color)
+  })
+  return next
+}
+
 export default function DodgeLivePage() {
   const socket   = useSocket()
   const navigate = useNavigate()
@@ -32,7 +44,8 @@ export default function DodgeLivePage() {
   const [countdown, setCountdown] = useState<number | null>(null)
   const [gameOver,  setGameOver]  = useState(false)
 
-  const rankingRef = useRef<{ jugadorId: string; nombre: string; puntos: number; color: string }[]>([])
+  const inGameRef    = useRef(false)
+  const rankingRef   = useRef<{ jugadorId: string; nombre: string; puntos: number; color: string }[]>([])
 
   useEffect(() => {
     const emitJoin = () => socket.emit('join-sala', MALL_JOIN)
@@ -41,33 +54,15 @@ export default function DodgeLivePage() {
 
     const cleanupRejoin = rejoinOnResume(socket, MALL_JOIN)
 
-    socket.on('players-update', (data: any[]) => {
-      setJugadores(prev => {
-        const next = { ...prev }
-        const idsActivos = new Set(
-          data.filter(j => j.id !== 'mall-screen' && j.id !== 'admin-panel').map(j => j.id)
-        )
-        Object.keys(next).forEach(id => {
-          if (!idsActivos.has(id)) delete next[id]
-        })
-        data.forEach(j => {
-          if (j.id === 'mall-screen' || j.id === 'admin-panel') return
-          next[j.id] = {
-            nombre:    j.nombre || prev[j.id]?.nombre || 'Jugador',
-            color:     j.color  || prev[j.id]?.color  || '#7c3aed',
-            carril:    prev[j.id]?.carril    ?? 1,
-            vidas:     prev[j.id]?.vidas     ?? VIDAS_INICIAL,
-            puntos:    prev[j.id]?.puntos    ?? 0,
-            eliminado: prev[j.id]?.eliminado ?? false,
-            obstaculos: prev[j.id]?.obstaculos ?? [],
-          }
-        })
-        return next
-      })
+    socket.on('players-update', (data: { id: string; nombre?: string; color?: string }[]) => {
+      if (inGameRef.current) return
+      setJugadores(rosterToJugadores(data))
     })
 
     socket.on('dodge-player-state', (data: {
       jugadorId: string
+      nombre?: string
+      color?: string
       carril: number
       vidas: number
       puntos: number
@@ -75,16 +70,18 @@ export default function DodgeLivePage() {
       obstaculos?: { id: number; lane: number; y: number }[]
     }) => {
       setJugadores(prev => {
-        if (!prev[data.jugadorId]) return prev
+        const base = prev[data.jugadorId] ?? jugadorVacio(data.nombre, data.color)
         return {
           ...prev,
           [data.jugadorId]: {
-            ...prev[data.jugadorId],
-            carril:     data.carril,
-            vidas:      data.vidas,
-            puntos:     data.puntos,
-            eliminado:  data.eliminado,
-            obstaculos: data.obstaculos ?? prev[data.jugadorId].obstaculos,
+            ...base,
+            nombre:    data.nombre ?? base.nombre,
+            color:     data.color  ?? base.color,
+            carril:    data.carril,
+            vidas:     data.vidas,
+            puntos:    data.puntos,
+            eliminado: data.eliminado,
+            obstaculos: data.obstaculos ?? base.obstaculos,
           },
         }
       })
@@ -94,27 +91,27 @@ export default function DodgeLivePage() {
       setCountdown(count > 0 ? count : null)
     })
 
-    socket.on('game-start', () => {
+    socket.on('game-start', ({ game, jugadores: roster }: { game?: string; jugadores?: { id: string; nombre?: string; color?: string }[] }) => {
+      if (game && game !== 'dodge') return
+      inGameRef.current = true
       setCountdown(null)
       setGameOver(false)
-      setJugadores(prev => {
-        const next = { ...prev }
-        Object.keys(next).forEach(id => {
-          next[id] = {
-            ...next[id],
-            vidas: VIDAS_INICIAL,
-            puntos: 0,
-            eliminado: false,
-            obstaculos: [],
-            carril: 1,
-          }
+      if (roster && roster.length > 0) {
+        setJugadores(rosterToJugadores(roster))
+      } else {
+        setJugadores(prev => {
+          const next = { ...prev }
+          Object.keys(next).forEach(id => {
+            next[id] = { ...next[id], vidas: VIDAS_INICIAL, puntos: 0, eliminado: false, obstaculos: [], carril: 1 }
+          })
+          return next
         })
-        return next
-      })
+      }
     })
 
     socket.on('partida-finalizada', ({ ranking }: { ranking: any[] }) => {
       if (ranking.length > 0) rankingRef.current = ranking
+      inGameRef.current = false
       setGameOver(true)
       setTimeout(() => {
         navigate('/mall/results', { state: { ranking: rankingRef.current, game: 'dodge' } })
@@ -124,6 +121,7 @@ export default function DodgeLivePage() {
     socket.on('ranking-partida', (ranking: any[]) => {
       if (ranking.length === 0) {
         rankingRef.current = []
+        inGameRef.current = false
         setJugadores({})
       } else {
         rankingRef.current = ranking
@@ -131,6 +129,7 @@ export default function DodgeLivePage() {
     })
 
     socket.on('round-reset', () => {
+      inGameRef.current = false
       setJugadores({})
       setCountdown(null)
       setGameOver(false)

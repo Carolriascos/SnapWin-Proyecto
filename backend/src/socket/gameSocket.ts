@@ -1,4 +1,4 @@
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 import ScoresRepository from "../routes/scores/scores.repository";
 
 const DISCONNECT_GRACE_MS = 120_000;
@@ -26,6 +26,46 @@ export const setupSocket = (io: Server) => {
   const salaCountdownIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   const salaRoundId: Map<string, number> = new Map();
   const disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  const salaDodgeState: Map<string, Record<string, {
+    jugadorId: string;
+    carril: number;
+    vidas: number;
+    puntos: number;
+    eliminado: boolean;
+    obstaculos?: any[];
+  }>> = new Map();
+
+  const getActivePlayers = (salaId: string) => {
+    const jugadores = salas.get(salaId) ?? [];
+    return jugadores.filter((j) => !isSistema(j.id) && (j.estado === "jugando" || j.estado === "terminado"));
+  };
+
+  const getRosterPayload = (salaId: string) =>
+    getActivePlayers(salaId).map((j) => ({
+      id: j.id,
+      nombre: j.nombre ?? "Jugador",
+      color: j.color ?? "#7c3aed",
+    }));
+
+  const syncMallDodgeState = (socket: Socket, salaId: string) => {
+    const game = salaGameMode.get(salaId);
+    if (!salaCountdownStarted.get(salaId) || game !== "dodge") return;
+
+    const roster = getRosterPayload(salaId);
+    socket.emit("game-start", { salaId, game: "dodge", jugadores: roster, timestamp: Date.now() });
+    socket.emit("countdown", { count: 0 });
+
+    const states = salaDodgeState.get(salaId) ?? {};
+    const jugadores = salas.get(salaId) ?? [];
+    Object.values(states).forEach((state) => {
+      const jugador = jugadores.find((j) => j.id === state.jugadorId);
+      socket.emit("dodge-player-state", {
+        ...state,
+        nombre: jugador?.nombre ?? "Jugador",
+        color: jugador?.color ?? "#7c3aed",
+      });
+    });
+  };
 
   const isSistema = (id: string) => id === "mall-screen" || id === "admin-panel";
 
@@ -95,7 +135,14 @@ export const setupSocket = (io: Server) => {
     salas.set(salaId, jugadores);
 
     const game = salaGameMode.get(salaId) ?? "shake";
-    io.to(salaId).emit("game-start", { salaId, game, timestamp: Date.now() });
+    if (game === "dodge") salaDodgeState.set(salaId, {});
+
+    io.to(salaId).emit("game-start", {
+      salaId,
+      game,
+      jugadores: getRosterPayload(salaId),
+      timestamp: Date.now(),
+    });
     io.to(salaId).emit("countdown", { count: 0 });
     emitPlayersUpdate(salaId);
   };
@@ -125,6 +172,7 @@ export const setupSocket = (io: Server) => {
     salaTerminados.set(salaId, new Set());
     salaCountdownStarted.delete(salaId);
     salaAdminWantsStart.delete(salaId);
+    salaDodgeState.delete(salaId);
     const roundId = salaRoundId.get(salaId) ?? 0;
     io.to(salaId).emit("round-reset", { roundId });
     io.to(salaId).emit("ranking-partida", []);
@@ -186,6 +234,7 @@ export const setupSocket = (io: Server) => {
 
       salas.set(salaId, jugadoresEnSala);
       emitPlayersUpdate(salaId);
+      if (jugador?.id === "mall-screen") syncMallDodgeState(socket, salaId);
       if (!isSistema(jugador?.id) && (previo?.estado === "espera" || !previo)) {
         tryStartLobby(salaId);
       }
@@ -203,7 +252,17 @@ export const setupSocket = (io: Server) => {
     });
 
     socket.on("dodge-sync", (data: { salaId: string; jugadorId: string; carril: number; vidas: number; puntos: number; eliminado: boolean; obstaculos?: any[] }) => {
-      io.to(data.salaId).emit("dodge-player-state", data);
+      const states = salaDodgeState.get(data.salaId) ?? {};
+      states[data.jugadorId] = data;
+      salaDodgeState.set(data.salaId, states);
+
+      const jugadores = salas.get(data.salaId) ?? [];
+      const jugador = jugadores.find((j) => j.id === data.jugadorId);
+      io.to(data.salaId).emit("dodge-player-state", {
+        ...data,
+        nombre: jugador?.nombre ?? "Jugador",
+        color: jugador?.color ?? "#7c3aed",
+      });
     });
 
     socket.on("game-over", async (data: { salaId: string; jugadorId: string; puntos: number }) => {
