@@ -8,6 +8,7 @@ import cors from "cors";
 import { AuthRouter } from "./routes/auth/auth.router";
 import { ScoresRouter } from "./routes/scores/scores.router";
 import { CouponsRouter } from "./routes/coupons/coupons.router";
+import { EmailRouter } from "./routes/email/email.router";   
 import { setupSocket } from "./socket/gameSocket";
 import { AdminRouter } from "./routes/admin/admin.router";
 
@@ -24,6 +25,7 @@ app.use("/admin", express.static("../frontend/admin"));
 app.use("/auth", AuthRouter);
 app.use("/scores", ScoresRouter);
 app.use("/coupons", CouponsRouter);
+app.use("/email", EmailRouter);   
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });

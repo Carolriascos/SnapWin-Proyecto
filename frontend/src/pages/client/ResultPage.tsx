@@ -1,14 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import emailjs from '@emailjs/browser'
 import { Coupon } from '../../types'
 import SnapHeader from '../../components/SnapHeader'
 import { API_BASE } from '../../config/api'
 import { useSocket } from '../../hooks/useSocket'
 
-const EMAILJS_SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID
-const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
-const EMAILJS_PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
 
 interface JugadorRanking {
   jugadorId: string
@@ -17,16 +13,26 @@ interface JugadorRanking {
   color?: string
 }
 
-function enviarCuponPorCorreo(cupon: Coupon) {
-  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) return
+async function enviarCuponPorCorreo(cupon: Coupon) {
   const correo = localStorage.getItem('correo') ?? ''
+  const nombre = localStorage.getItem('nombre') ?? 'Jugador'
   if (!correo) return
-  emailjs.send(
-    EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID,
-    { to_email: correo, nombre: localStorage.getItem('nombre') ?? 'Jugador',
-      correo, codigo: cupon.codigo, nivel: cupon.nivel, descuento: String(cupon.descuento) },
-    EMAILJS_PUBLIC_KEY
-  ).catch(err => console.error('EmailJS error:', err))
+
+  try {
+    await fetch(`${API_BASE}/email/send-coupon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to_email: correo,
+        nombre,
+        codigo: cupon.codigo,
+        nivel: cupon.nivel,
+        descuento: String(cupon.descuento),
+      }),
+    })
+  } catch (err) {
+    console.error('Error al enviar cupón por correo:', err)
+  }
 }
 
 export default function ResultPage() {
@@ -74,7 +80,7 @@ export default function ResultPage() {
           const cd = await res.json()
           if (cd.success) {
             setCupon(cd.data)
-            enviarCuponPorCorreo(cd.data)
+            await enviarCuponPorCorreo(cd.data)  // ✅ llama al backend
             socket.emit('cupon-generado', { salaId, codigo: cd.data.codigo })
           }
         } catch (e) { console.error('Error generando cupón:', e) }
@@ -179,7 +185,6 @@ export default function ResultPage() {
                   Cupón enviado a <strong>{localStorage.getItem('correo') ?? 'tu correo'}</strong>
                 </div>
 
-                {}
                 {!canjeado ? (
                   <button
                     type="button"
