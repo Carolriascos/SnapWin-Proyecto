@@ -14,6 +14,7 @@ const DOT_RADIUS_PX   = DOT_DIAMETER_PX / 2
 const MIN_DIST_PX     = DOT_DIAMETER_PX + 2
 const MAX_ATTEMPTS    = 150
 const MAX_DOTS_PER_EVENT = 10
+const MAX_BOARD_DOTS     = 700
 
 interface BoardDot {
   id: string
@@ -38,14 +39,18 @@ function findFreePosition(
     })
     if (!overlaps) return { x, y }
   }
-  return {
-    x: margin + Math.random() * (boardW - margin * 2),
-    y: margin + Math.random() * (boardH - margin * 2),
-  }
+  return null
 }
 
 function dotsForForce(fuerza: number): number {
   return Math.max(1, Math.min(MAX_DOTS_PER_EVENT, Math.round(Math.abs(fuerza) / 6)))
+}
+
+function colorFromId(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  const hue = h % 360
+  return `hsl(${hue}, 82%, 58%)`
 }
 
 export default function ShakeLivePage() {
@@ -92,8 +97,9 @@ export default function ShakeLivePage() {
           y: pos.y,
         })
       }
-      dotsRef.current = next
-      return next
+      const trimmed = next.length > MAX_BOARD_DOTS ? next.slice(next.length - MAX_BOARD_DOTS) : next
+      dotsRef.current = trimmed
+      return trimmed
     })
   }, [])
 
@@ -114,7 +120,7 @@ export default function ShakeLivePage() {
           if (j.id === 'mall-screen' || j.id === 'admin-panel') return
           next[j.id] = {
             nombre: j.nombre || "Jugador",
-            color:  j.color  || "#888",
+            color:  j.color  || prev[j.id]?.color || colorFromId(String(j.id ?? '')),
             puntos: prev[j.id]?.puntos ?? 0,
           }
         })
@@ -124,11 +130,10 @@ export default function ShakeLivePage() {
     })
 
     socket.on("score-update", ({ jugadorId, fuerza }: { jugadorId: string; fuerza: number }) => {
-      let color = "#888"
+      const color = scoresRef.current[jugadorId]?.color || colorFromId(jugadorId)
       setScores(prev => {
         if (!prev[jugadorId]) return prev
         const nuevoPuntaje = (prev[jugadorId].puntos ?? 0) + Math.round(fuerza)
-        color = prev[jugadorId].color ?? color
         const next = {
           ...prev,
           [jugadorId]: { ...prev[jugadorId], puntos: nuevoPuntaje }
