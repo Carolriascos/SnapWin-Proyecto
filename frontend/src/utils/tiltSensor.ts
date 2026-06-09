@@ -29,9 +29,9 @@ export interface TiltSensorHandle {
 }
 
 const DEAD_ZONE_DEG      = 2   
-const LANE_THRESHOLD_DEG = 4    
-const COOLDOWN_MS        = 120  
-const SMOOTHING_ALPHA    = 0.75 
+const LANE_THRESHOLD_DEG = 2.5  
+const COOLDOWN_MS        = 80   
+const SMOOTHING_ALPHA    = 0.85 
 const CALIBRATION_COUNT  = 4    
 const NO_DATA_TIMEOUT_MS = 3000
 const ORIENT_STALE_MS    = 500
@@ -202,11 +202,11 @@ export function createTiltSensor(callbacks: TiltSensorCallbacks): TiltSensorHand
     if (now - lastChangeTime < COOLDOWN_MS) return
 
     if (relative > LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(-1)  
+      callbacks.onTilt(1)   // inclinar derecha → mover derecha
       lastChangeTime = now
       armed = false
     } else if (relative < -LANE_THRESHOLD_DEG) {
-      callbacks.onTilt(1)   
+      callbacks.onTilt(-1)  // inclinar izquierda → mover izquierda
       lastChangeTime = now
       armed = false
     }

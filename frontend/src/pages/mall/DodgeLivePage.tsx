@@ -17,6 +17,7 @@ interface Obstaculo {
   id: number
   lane: number
   y: number
+  hitIds?: Set<string>
 }
 
 const LANES         = 4
@@ -126,7 +127,7 @@ export default function DodgeLivePage() {
       if (gameOver) return
       setObstaculos(prev => [
         ...prev,
-        { id: idRef.current++, lane: Math.floor(Math.random() * LANES), y: -8 },
+        { id: idRef.current++, lane: Math.floor(Math.random() * LANES), y: -8, hitIds: new Set<string>() },
       ])
     }, SPAWN_MS)
 
@@ -135,43 +136,43 @@ export default function DodgeLivePage() {
       setObstaculos(prev => {
         const jug = jugadoresRef.current
 
-        const colisionados = new Set<number>()
+        const dañosPorJugador: Record<string, number> = {}
+
         prev.forEach(o => {
-          if (o.y > 72 && o.y < 88) {
-            Object.values(jug).forEach(j => {
-              if (!j.eliminado && j.carril === o.lane) colisionados.add(o.id)
-            })
-          }
+          if (o.y < 72 || o.y > 92) return           // fuera de zona de impacto
+          Object.entries(jugadoresRef.current).forEach(([id, j]) => {
+            if (j.eliminado) return                   // ya eliminado
+            if (j.carril !== o.lane) return           // carril diferente
+            if (o.hitIds && o.hitIds.has(id)) return  // ya dañó a este jugador antes
+            if (o.hitIds) o.hitIds.add(id)
+            dañosPorJugador[id] = (dañosPorJugador[id] ?? 0) + 1
+          })
         })
 
-        if (colisionados.size > 0) {
+        if (Object.keys(dañosPorJugador).length > 0) {
           setJugadores(jugPrev => {
             const next = { ...jugPrev }
-            Object.entries(next).forEach(([id, j]) => {
-              if (j.eliminado) return  
-              const hit = prev.some(o => colisionados.has(o.id) && o.lane === j.carril)
-              if (hit && j.vidas > 0) {
-                const nuevasVidas = j.vidas - 1
-                next[id] = { ...j, vidas: nuevasVidas, eliminado: nuevasVidas === 0 }
-              }
+            Object.entries(dañosPorJugador).forEach(([id, golpes]) => {
+              if (!next[id] || next[id].eliminado) return
+              const nuevasVidas = Math.max(0, next[id].vidas - golpes)
+              next[id] = { ...next[id], vidas: nuevasVidas, eliminado: nuevasVidas === 0 }
             })
             return next
           })
         }
 
-        const esquivados = prev.filter(o => o.y >= 100 && !colisionados.has(o.id))
-        if (esquivados.length > 0) {
+        const salieron = prev.filter(o => o.y >= 100)
+        if (salieron.length > 0) {
           setJugadores(jugPrev => {
             const next = { ...jugPrev }
             Object.entries(next).forEach(([id, j]) => {
-              if (!j.eliminado) next[id] = { ...j, puntos: j.puntos + esquivados.length * 100 }
+              if (!j.eliminado) next[id] = { ...j, puntos: j.puntos + salieron.length * 100 }
             })
             return next
           })
         }
 
         return prev
-          .filter(o => !colisionados.has(o.id))
           .map(o => ({ ...o, y: o.y + SPEED_PCT }))
           .filter(o => o.y < 105)
       })
@@ -218,7 +219,7 @@ export default function DodgeLivePage() {
 
       {countdown !== null && countdown > 0 && (
         <div className="dodge-countdown">
-          ⏳ El juego empieza en {countdown}s
+          El juego empieza en {countdown}s
         </div>
       )}
 
@@ -270,7 +271,7 @@ export default function DodgeLivePage() {
 
                 {j.eliminado && (
                   <div className="dodge-dead-overlay">
-                    <span>💀</span>
+                    <span></span>
                     <p>ELIMINADO</p>
                   </div>
                 )}
